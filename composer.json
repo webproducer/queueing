@@ -1,0 +1,24 @@
+{
+  "name": "wp/queueing",
+  "type": "package",
+  "license": "MIT",
+  "description": "Queueing toolkit for PHP (with beanstalkd as default backend)",
+  "homepage": "https://github.com/webproducer/queueing",
+  "authors": [
+    {
+      "name": "Alexander",
+      "email": "sasha@webproducers.ru"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Queueing\\": "src/"
+    }
+  },
+  "require": {
+
+  },
+  "suggest": {
+    "pda/pheanstalk" : "To use beanstalkd as backend"
+  }
+}
