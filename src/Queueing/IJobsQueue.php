@@ -9,12 +9,16 @@ interface IJobsQueue
     const DEFAULT_PRI = 1;
 
     /**
+     * Wait [timeout] for ready job to reserve
+     *
      * @param int|null $timeout
      * @return array - [$jobId, $payload]
      */
     function reserve(int $timeout = null): array;
 
     /**
+     * Add new job
+     *
      * @param string $payload
      * @param int $priority
      * @param int $delaySeconds
@@ -29,11 +33,23 @@ interface IJobsQueue
     ): int;
 
     /**
+     * Return job back to queue
+     *
+     * @param int $id
+     * @param int $delaySeconds
+     */
+    function release(int $id, int $delaySeconds = 0);
+
+    /**
+     * Delete job
+     *
      * @param int $id
      */
     function delete(int $id);
 
     /**
+     * Bury (fail) job
+     *
      * @param int $id
      */
     function bury(int $id);

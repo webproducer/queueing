@@ -1,7 +1,7 @@
 <?php
 namespace Queueing\Console;
 
-use Queueing\{ BaseJobFactory, IJobFactory, IJobPerformer, IJobsQueue, QueueProcessor };
+use Queueing\{ BaseFactory, IJobFactory, IJobPerformer, IJobsQueue, QueueProcessor };
 use Queueing\Pheanstalk\JobsQueue;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\{ InputDefinition, InputInterface, InputOption };
@@ -20,7 +20,7 @@ class ProcessQueueCommand extends Command
 
     public function __construct($name = null) {
         parent::__construct($name);
-        $this->factory = new BaseJobFactory();
+        $this->factory = new BaseFactory();
     }
 
     public function setPerformer(IJobPerformer $performer) {
@@ -34,10 +34,15 @@ class ProcessQueueCommand extends Command
     }
 
     protected function configure() {
-        $req = InputOption::VALUE_REQUIRED;
         $this->setName("wp:process-queue")
             ->setDescription("Run queue processing script")
-            ->addOption('backend', 'b', $req, 'Queue managing backend', 'beanstalk://127.0.0.1:11300/?queue=default');
+            ->addOption(
+                'backend',
+                'b',
+                InputOption::VALUE_REQUIRED,
+                'Queue managing backend',
+                'beanstalk://127.0.0.1:11300/?queue=default'
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output) {
@@ -70,7 +75,7 @@ class ProcessQueueCommand extends Command
                     parse_str($dsn['query'], $q);
                     $queue = $q['queue'] ?? 'default';
                 }
-                return JobsQueue::create($queue, $dsn['host'], $dsn['port'] ?? 11300);
+                return new JobsQueue($queue, $dsn['host'], $dsn['port'] ?? 11300);
             default:
                 throw new \InvalidArgumentException("Unknown backend: {$dsn['scheme']}");
         }

@@ -7,8 +7,6 @@ class QueueProcessor
 
     private $_jobWaitTimeout = self::DEFAULT_WAIT_TIMEOUT;
 
-    private $_errorHandler = null;
-
     /** @var IJobPerformer */
     private $_performer;
 
@@ -19,16 +17,7 @@ class QueueProcessor
         $jobWaitTimeout = self::DEFAULT_WAIT_TIMEOUT
     ) {
         $this->_jobWaitTimeout = $jobWaitTimeout;
-        $this->_jobFactory = new BaseJobFactory();
-    }
-
-    /**
-     * @param \Closure $callback
-     * @return self
-     */
-    public function setErrorHandler(\Closure $callback) {
-        $this->_errorHandler = $callback;
-        return $this;
+        $this->_jobFactory = new BaseFactory();
     }
 
     public function setJobPerformer(IJobPerformer $performer) {
@@ -62,18 +51,22 @@ class QueueProcessor
                 }
                 if ($this->_performer) {
                     $this->_performer->perform($job);
-                    $queue->delete($id);
                 }
-                yield $job;
-            } catch (\Exception $e) {
+                if ($error = yield $job) {
+                    throw $error;
+                }
+                $queue->delete($id);
+            } catch (JobCreatingException $e) {
                 if (!is_null($job)) {
                     $queue->bury($job->getId());
                 }
-                if (
-                    is_null($this->_errorHandler) ||
-                    call_user_func_array($this->_errorHandler, [$e, $job])
-                ) {
-                    throw $e;
+            } catch (PerformingException $e) {
+                if (!is_null($job)) {
+                    if ($e->needsToBeRepeated()) {
+                        $queue->release($job->getId(), $e->getRepeatDelay());
+                        continue;
+                    }
+                    $queue->bury($job->getId());
                 }
             }
         }

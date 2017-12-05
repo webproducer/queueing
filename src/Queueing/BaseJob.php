@@ -19,7 +19,9 @@ class BaseJob implements IJob
     }
 
     /**
-     * @inheritdoc
+     * @param int $id
+     * @param string $payload
+     * @return static
      */
     public static function createWithIdAndPayload(int $id, string $payload) {
         return new static($payload, intval($id));
@@ -41,12 +43,12 @@ class BaseJob implements IJob
 
     /**
      * @return array
-     * @throws QueueException
+     * @throws Exception
      */
     public function getJsonData(): array {
         $data = json_decode($this->_data, true);
         if (is_null($data)) {
-            throw new QueueException(sprintf("Can't parse JSON data: %s", json_last_error_msg()));
+            throw new Exception(sprintf("Can't parse JSON data: %s", json_last_error_msg()));
         }
         return $data;
     }
