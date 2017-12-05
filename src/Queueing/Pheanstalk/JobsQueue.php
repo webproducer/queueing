@@ -17,28 +17,25 @@ class JobsQueue implements IJobsQueue
 
     private $_delay = 0;
 
-
-    private function __construct() {
-
-    }
-
-    public static function createWithClient(Pheanstalk $client) {
-        $q = new self();
-        $q->_client = $client;
-        return $q;
+    /**
+     * JobsQueue constructor.
+     * @param string $tubeName
+     * @param string $host
+     * @param string $port
+     */
+    public function __construct(string $tubeName = 'default', string $host = '127.0.0.1', string $port = '11300') {
+        $this->_tubeName = $tubeName;
+        $this->_host = $host;
+        $this->_port = $port;
     }
 
     /**
-     * @param string $tubeName
-     * @param string $host
-     * @param int $port
+     * @param Pheanstalk $client
      * @return JobsQueue
      */
-    public static function create($tubeName = 'default', $host = '127.0.0.1', $port = 11300) {
+    public static function createWithClient(Pheanstalk $client) {
         $q = new self();
-        $q->_tubeName = $tubeName;
-        $q->_host = $host;
-        $q->_port = $port;
+        $q->_client = $client;
         return $q;
     }
 
@@ -60,6 +57,9 @@ class JobsQueue implements IJobsQueue
         return $this;
     }
 
+    /**
+     * @inheritdoc
+     */
     public function reserve(int $timeout = null): array {
         $this->_checkConnection();
         $rawJob = $this->_client->reserve($timeout);
@@ -69,6 +69,9 @@ class JobsQueue implements IJobsQueue
         return [$rawJob->getId(), $rawJob->getData()];
     }
 
+    /**
+     * @inheritdoc
+     */
     public function add(
         string $payload,
         int $priority = self::DEFAULT_PRI,
@@ -84,11 +87,30 @@ class JobsQueue implements IJobsQueue
         );
     }
 
+    /**
+     * @inheritDoc
+     */
+    public function release(int $id, int $delaySeconds = 0) {
+        $this->_checkConnection();
+        $this->_client->release(
+            new Job($id, null),
+            self::DEFAULT_PRI,
+            $delaySeconds
+        );
+    }
+
+
+    /**
+     * @inheritdoc
+     */
     public function delete(int $id) {
         $this->_checkConnection();
         $this->_client->delete(new Job($id, null));
     }
 
+    /**
+     * @inheritdoc
+     */
     public function bury(int $id) {
         $this->_checkConnection();
         $this->_client->bury(new Job($id, null));

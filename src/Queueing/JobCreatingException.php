@@ -2,7 +2,7 @@
 namespace Queueing;
 
 
-class JobCreatingException extends QueueException
+class JobCreatingException extends Exception
 {
 
 }
