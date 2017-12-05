@@ -19,6 +19,7 @@
 
   },
   "suggest": {
-    "pda/pheanstalk" : "To use beanstalkd as backend"
+    "pda/pheanstalk": "To use beanstalkd as backend",
+    "symfony/console": "To run console queue processing command"
   }
 }

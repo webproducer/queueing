@@ -3,19 +3,23 @@ namespace Queueing;
 
 class QueueProcessor
 {
-    const DEFAULT_WAIT_TIMEOUT = 5;    // 5 seconds
-    const DEFAULT_SLEEP_INTERVAL = 10; // 10 seconds
+    const DEFAULT_WAIT_TIMEOUT = 2;    // 2 seconds
 
     private $_jobWaitTimeout = self::DEFAULT_WAIT_TIMEOUT;
-    private $_sleepOnNoJob = self::DEFAULT_SLEEP_INTERVAL;
+
     private $_errorHandler = null;
 
+    /** @var IJobPerformer */
+    private $_performer;
+
+    /** @var IJobFactory */
+    private $_jobFactory;
+
     public function __construct(
-        $jobWaitTimeout = self::DEFAULT_WAIT_TIMEOUT,
-        $sleepOnNoJob = self::DEFAULT_SLEEP_INTERVAL
+        $jobWaitTimeout = self::DEFAULT_WAIT_TIMEOUT
     ) {
         $this->_jobWaitTimeout = $jobWaitTimeout;
-        $this->_sleepOnNoJob = $sleepOnNoJob;
+        $this->_jobFactory = new BaseJobFactory();
     }
 
     /**
@@ -27,6 +31,16 @@ class QueueProcessor
         return $this;
     }
 
+    public function setJobPerformer(IJobPerformer $performer) {
+        $this->_performer = $performer;
+        return $this;
+    }
+
+    public function setJobFactory(IJobFactory $f) {
+        $this->_jobFactory = $f;
+        return $this;
+    }
+
     /**
      * @param IJobsQueue $queue
      * @return \Generator
@@ -34,26 +48,31 @@ class QueueProcessor
      */
     public function process(IJobsQueue $queue) {
         while (true) {
+            /** @var IJob $job */
             $job = null;
             try {
-                $job = $queue->reserve($this->_jobWaitTimeout);
-                if (is_null($job)) {
+                list($id, $data) = $queue->reserve($this->_jobWaitTimeout);
+                if (!$id) {
                     yield null;
-                    sleep($this->_sleepOnNoJob);
                     continue;
                 }
-                $job->perform();
-                $queue->delete($job);
+                $job = $this->_jobFactory->makeJob($id, $data);
+                if (!($job instanceof IJob)) {
+                    throw new JobCreatingException("Job instance must implement IJob");
+                }
+                if ($this->_performer) {
+                    $this->_performer->perform($job);
+                    $queue->delete($id);
+                }
                 yield $job;
             } catch (\Exception $e) {
-                $rethrow = true;
                 if (!is_null($job)) {
-                    $queue->bury($job);
+                    $queue->bury($job->getId());
                 }
-                if (!is_null($this->_errorHandler)) {
-                    $rethrow = call_user_func_array($this->_errorHandler, [$e, $job]);
-                }
-                if ($rethrow) {
+                if (
+                    is_null($this->_errorHandler) ||
+                    call_user_func_array($this->_errorHandler, [$e, $job])
+                ) {
                     throw $e;
                 }
             }

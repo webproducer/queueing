@@ -5,27 +5,37 @@ namespace Queueing;
 interface IJobsQueue
 {
 
-    /**
-     * @param null|int $timeout In seconds
-     * @return IJob|null
-     */
-    function reserve($timeout = null);
+    const DEFAULT_TTR = 600; // 10 mins
+    const DEFAULT_PRI = 1;
 
     /**
-     * @param IJob $job
+     * @param int|null $timeout
+     * @return array - [$jobId, $payload]
      */
-    function add(IJob $job);
+    function reserve(int $timeout = null): array;
 
     /**
-     * @param IJob $job
-     * @return mixed
+     * @param string $payload
+     * @param int $priority
+     * @param int $delaySeconds
+     * @param int $ttr
+     * @return int - Created Job id
      */
-    function delete(IJob $job);
+    function add(
+        string $payload,
+        int $priority = self::DEFAULT_PRI,
+        int $delaySeconds = 0,
+        int $ttr = self::DEFAULT_TTR
+    ): int;
 
     /**
-     * @param IJob $job
-     * @return mixed
+     * @param int $id
      */
-    function bury(IJob $job);
+    function delete(int $id);
+
+    /**
+     * @param int $id
+     */
+    function bury(int $id);
 
 }
