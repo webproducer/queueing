@@ -2,16 +2,10 @@
 namespace Queueing\Pheanstalk;
 
 use Queueing\IJobsQueue;
-use Queueing\IJob;
-use Queueing\JobCreatingException;
-use Pheanstalk\Job;
-use Pheanstalk\PheanstalkInterface;
-use Pheanstalk\Pheanstalk;
+use Pheanstalk\{ PheanstalkInterface, Job, Pheanstalk };
 
 class JobsQueue implements IJobsQueue
 {
-
-    const DEFAULT_TTR = 600; // 10 minutes
 
     /** @var Pheanstalk */
     private $_client = null;
@@ -22,7 +16,6 @@ class JobsQueue implements IJobsQueue
     private $_port = 11300;
 
     private $_delay = 0;
-    private $_ttr = self::DEFAULT_TTR;
 
 
     private function __construct() {
@@ -67,50 +60,38 @@ class JobsQueue implements IJobsQueue
         return $this;
     }
 
-    public function reserve($timeout = null) {
+    public function reserve(int $timeout = null): array {
         $this->_checkConnection();
         $rawJob = $this->_client->reserve($timeout);
         if (!$rawJob) {
-            return null;
+            return [0, null];
         }
-        $rawData = json_decode($rawJob->getData(), true);
-        if (!isset($rawData['class'])) {
-            $this->_client->bury($rawJob);
-            throw new JobCreatingException("Job class is not specified. Buried.");
-        }
-        if (!is_subclass_of($rawData['class'], IJob::class, true)) {
-            $this->_client->bury($rawJob);
-            throw new JobCreatingException("Class {$rawData['class']} doesn't implement IJob interface. Buried.");
-        }
-        $payload = isset($rawData['payload']) ? $rawData['payload'] : null;
-        return call_user_func_array(
-            [$rawData['class'], 'createWithIdAndPayload'],
-            [$rawJob->getId(), $payload]
+        return [$rawJob->getId(), $rawJob->getData()];
+    }
+
+    public function add(
+        string $payload,
+        int $priority = self::DEFAULT_PRI,
+        int $delaySeconds = 0,
+        int $ttr = self::DEFAULT_TTR
+    ): int {
+        $this->_checkConnection();
+        return $this->_client->put(
+            $payload,
+            $priority,
+            $delaySeconds,
+            $ttr
         );
     }
 
-    public function add(IJob $job) {
+    public function delete(int $id) {
         $this->_checkConnection();
-        $data = [
-            'class' => get_class($job),
-            'payload' => $job->getPayload()
-        ];
-        $this->_client->put(
-            json_encode($data),
-            PheanstalkInterface::DEFAULT_PRIORITY,
-            $this->_delay,
-            $this->_ttr
-        );
+        $this->_client->delete(new Job($id, null));
     }
 
-    public function delete(IJob $job) {
+    public function bury(int $id) {
         $this->_checkConnection();
-        $this->_client->delete(new Job($job->getId(), null));
-    }
-
-    public function bury(IJob $job) {
-        $this->_checkConnection();
-        $this->_client->bury(new Job($job->getId(), null));
+        $this->_client->bury(new Job($id, null));
     }
 
     private function _checkConnection() {

@@ -5,21 +5,20 @@ interface IJob
 {
     /**
      * @param int $id
-     * @param string|null $payload
+     * @param string $payload
      * @return static
      */
-    static function createWithIdAndPayload($id, $payload = null);
+    static function createWithIdAndPayload(int $id, string $payload);
 
     /**
-     * @return array|null
+     * @return string
      */
-    function getPayload();
+    function getPayload(): string;
 
     /**
      * @return int
      */
-    function getId();
+    function getId(): int;
 
-    function perform();
 
 }
