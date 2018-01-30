@@ -16,7 +16,7 @@
     }
   },
   "require": {
-
+    "php" : ">=7.1"
   },
   "suggest": {
     "pda/pheanstalk": "To use beanstalkd as backend",
