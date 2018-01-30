@@ -12,7 +12,7 @@
   ],
   "autoload": {
     "psr-4": {
-      "Queueing\\": "src/Queueing/"
+      "Queueing\\": "lib/"
     }
   },
   "require": {
