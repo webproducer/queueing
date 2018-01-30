@@ -7,37 +7,37 @@ class QueueProcessor
 
     private $_jobWaitTimeout = self::DEFAULT_WAIT_TIMEOUT;
 
-    /** @var IJobPerformer */
+    /** @var JobPerformerInterface */
     private $_performer;
 
-    /** @var IJobFactory */
+    /** @var JobFactoryInterface */
     private $_jobFactory;
 
     public function __construct(
         $jobWaitTimeout = self::DEFAULT_WAIT_TIMEOUT
     ) {
         $this->_jobWaitTimeout = $jobWaitTimeout;
-        $this->_jobFactory = new BaseFactory();
+        $this->_jobFactory = new BaseFactoryInterface();
     }
 
-    public function setJobPerformer(IJobPerformer $performer) {
+    public function setJobPerformer(JobPerformerInterface $performer) {
         $this->_performer = $performer;
         return $this;
     }
 
-    public function setJobFactory(IJobFactory $f) {
+    public function setJobFactory(JobFactoryInterface $f) {
         $this->_jobFactory = $f;
         return $this;
     }
 
     /**
-     * @param IJobsQueue $queue
+     * @param JobsQueueInterface $queue
      * @return \Generator
      * @throws \Exception
      */
-    public function process(IJobsQueue $queue) {
+    public function process(JobsQueueInterface $queue) {
         while (true) {
-            /** @var IJob $job */
+            /** @var JobInterface $job */
             $job = null;
             try {
                 list($id, $data) = $queue->reserve($this->_jobWaitTimeout);
@@ -46,7 +46,7 @@ class QueueProcessor
                     continue;
                 }
                 $job = $this->_jobFactory->makeJob($id, $data);
-                if (!($job instanceof IJob)) {
+                if (!($job instanceof JobInterface)) {
                     throw new JobCreatingException("Job instance must implement IJob");
                 }
                 if ($this->_performer) {

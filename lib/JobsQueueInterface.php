@@ -2,7 +2,7 @@
 namespace Queueing;
 
 
-interface IJobsQueue
+interface JobsQueueInterface
 {
 
     const DEFAULT_TTR = 600; // 10 mins

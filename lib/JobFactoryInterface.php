@@ -9,14 +9,14 @@
 namespace Queueing;
 
 
-interface IJobFactory
+interface JobFactoryInterface
 {
 
     /**
      * @param int $id
      * @param string $payload
-     * @return IJob
+     * @return JobInterface
      */
-    function makeJob(int $id, string $payload): IJob;
+    function makeJob(int $id, string $payload): JobInterface;
 
 }

@@ -2,7 +2,7 @@
 namespace Queueing;
 
 
-class FactoryFunc implements IJobFactory
+class FactoryInterfaceFunc implements JobFactoryInterface
 {
 
     private $f;
@@ -18,7 +18,7 @@ class FactoryFunc implements IJobFactory
     /**
      * @inheritDoc
      */
-    public function makeJob(int $id, string $payload): IJob {
+    public function makeJob(int $id, string $payload): JobInterface {
         return call_user_func_array($this->f, [$id, $payload]);
     }
 

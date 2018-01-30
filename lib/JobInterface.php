@@ -1,7 +1,7 @@
 <?php
 namespace Queueing;
 
-interface IJob
+interface JobInterface
 {
     /**
      * @return string

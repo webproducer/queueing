@@ -1,7 +1,7 @@
 <?php
 namespace Queueing;
 
-class BaseFactory implements IJobFactory
+class BaseFactoryInterface implements JobFactoryInterface
 {
 
     private $class;
@@ -10,14 +10,14 @@ class BaseFactory implements IJobFactory
      * BaseFactory constructor.
      * @param string $jobClassname
      */
-    public function __construct($jobClassname = BaseJob::class) {
+    public function __construct($jobClassname = BaseJobInterface::class) {
         $this->class = $jobClassname;
     }
 
     /**
      * @inheritDoc
      */
-    public function makeJob(int $id, string $payload): IJob {
+    public function makeJob(int $id, string $payload): JobInterface {
         return call_user_func_array([$this->class, 'createWithIdAndPayload'], [$id, $payload]);
     }
 

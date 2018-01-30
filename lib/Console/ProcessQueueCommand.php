@@ -1,34 +1,43 @@
 <?php
 namespace Queueing\Console;
 
-use Queueing\{ BaseFactory, IJobFactory, IJobPerformer, IJobsQueue, QueueProcessor };
+use Queueing\{
+    BaseFactoryInterface,
+    JobFactoryInterface,
+    JobPerformerInterface,
+    JobsQueueInterface,
+    QueueProcessor
+};
 use Queueing\Pheanstalk\JobsQueue;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\{ InputDefinition, InputInterface, InputOption };
+use Symfony\Component\Console\Input\{
+    InputInterface,
+    InputOption
+};
 use Symfony\Component\Console\Output\OutputInterface;
 
 class ProcessQueueCommand extends Command
 {
 
-    /** @var IJobPerformer */
+    /** @var JobPerformerInterface */
     private $performer;
 
-    /** @var IJobFactory */
+    /** @var JobFactoryInterface */
     private $factory;
 
     private $terminated = false;
 
     public function __construct($name = null) {
         parent::__construct($name);
-        $this->factory = new BaseFactory();
+        $this->factory = new BaseFactoryInterface();
     }
 
-    public function setPerformer(IJobPerformer $performer) {
+    public function setPerformer(JobPerformerInterface $performer) {
         $this->performer = $performer;
         return $this;
     }
 
-    public function setFactory(IJobFactory $f) {
+    public function setFactory(JobFactoryInterface $f) {
         $this->factory = $f;
         return $this;
     }
@@ -64,7 +73,7 @@ class ProcessQueueCommand extends Command
 
     /**
      * @param string $desc
-     * @return IJobsQueue
+     * @return JobsQueueInterface
      */
     private function makeQueue($desc) {
         $dsn = parse_url($desc);

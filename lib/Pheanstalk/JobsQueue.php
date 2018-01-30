@@ -1,10 +1,12 @@
 <?php
 namespace Queueing\Pheanstalk;
 
-use Queueing\IJobsQueue;
-use Pheanstalk\{ PheanstalkInterface, Job, Pheanstalk };
+use Queueing\JobsQueueInterface;
+use Pheanstalk\{
+    Job,Pheanstalk
+};
 
-class JobsQueue implements IJobsQueue
+class JobsQueue implements JobsQueueInterface
 {
 
     /** @var Pheanstalk */
@@ -31,7 +33,7 @@ class JobsQueue implements IJobsQueue
 
     /**
      * @param Pheanstalk $client
-     * @return JobsQueue
+     * @return JobsQueueInterface
      */
     public static function createWithClient(Pheanstalk $client) {
         $q = new self();
