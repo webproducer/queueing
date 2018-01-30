@@ -51,19 +51,27 @@ class ProcessQueueCommand extends Command
                 InputOption::VALUE_REQUIRED,
                 'Queue managing backend',
                 'beanstalk://127.0.0.1:11300/?queue=default'
+            )->addOption(
+                'bulk',
+                '',
+                InputOption::VALUE_REQUIRED,
+                'Bulk processing',
+                0
             );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output) {
         if (!$this->performer) {
-            throw new \RuntimeException("You must set instance of IJobPerformer");
+            throw new \RuntimeException("You must set instance of JobPerformerInterface");
         }
         $p = new QueueProcessor();
         $p->setJobFactory($this->factory);
         $p->setJobPerformer($this->performer);
         $q = $this->makeQueue($input->getOption('backend'));
         $this->sigSetup();
-        foreach ($p->process($q) as $job) {
+        $bulk = intval($input->getOption('bulk'));
+        $processor = $bulk ? $p->bulkProcess($q, $bulk) : $p->process($q);
+        foreach ($processor as $_) {
             $this->sigDispatch();
             if ($this->terminated) {
                 break;

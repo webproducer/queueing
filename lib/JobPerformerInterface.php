@@ -7,7 +7,8 @@ interface JobPerformerInterface
 
     /**
      * @param JobInterface $job
+     * @throws PerformingException
      */
-    function perform(JobInterface $job);
+    public function perform(JobInterface $job);
 
 }

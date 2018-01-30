@@ -6,17 +6,33 @@ class PerformingException extends Exception
 {
     private $needRepeat = false;
     private $repeatDelay = 0;
+    /** @var JobInterface */
+    private $job = null;
 
-    public function repeatAfter(int $delaySeconds = 0) {
+    public function getJob(): JobInterface
+    {
+        return $this->job;
+    }
+
+    public function setJob(JobInterface $job): self
+    {
+        $this->job = $job;
+        return $this;
+    }
+
+    public function repeatAfter(int $delaySeconds = 0)
+    {
         $this->needRepeat = true;
         $this->repeatDelay = $delaySeconds;
     }
 
-    public function needsToBeRepeated() {
+    public function needsToBeRepeated()
+    {
         return $this->needRepeat;
     }
 
-    public function getRepeatDelay() {
+    public function getRepeatDelay()
+    {
         return $this->repeatDelay;
     }
 

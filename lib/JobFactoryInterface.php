@@ -16,6 +16,7 @@ interface JobFactoryInterface
      * @param int $id
      * @param string $payload
      * @return JobInterface
+     * @throws JobCreatingException
      */
     function makeJob(int $id, string $payload): JobInterface;
 
