@@ -1,7 +1,7 @@
 <?php
 namespace Queueing;
 
-class BaseFactoryInterface implements JobFactoryInterface
+class BaseFactory implements JobFactoryInterface
 {
 
     private $class;
@@ -10,7 +10,7 @@ class BaseFactoryInterface implements JobFactoryInterface
      * BaseFactory constructor.
      * @param string $jobClassname
      */
-    public function __construct($jobClassname = BaseJobInterface::class) {
+    public function __construct($jobClassname = BaseJob::class) {
         $this->class = $jobClassname;
     }
 

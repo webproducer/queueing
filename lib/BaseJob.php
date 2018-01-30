@@ -2,7 +2,7 @@
 namespace Queueing;
 
 
-class BaseJobInterface implements JobInterface
+class BaseJob implements JobInterface
 {
     private $_id = 0;
 

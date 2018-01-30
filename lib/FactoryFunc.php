@@ -2,7 +2,7 @@
 namespace Queueing;
 
 
-class FactoryInterfaceFunc implements JobFactoryInterface
+class FactoryFunc implements JobFactoryInterface
 {
 
     private $f;

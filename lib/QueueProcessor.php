@@ -17,7 +17,7 @@ class QueueProcessor
         $jobWaitTimeout = self::DEFAULT_WAIT_TIMEOUT
     ) {
         $this->_jobWaitTimeout = $jobWaitTimeout;
-        $this->_jobFactory = new BaseFactoryInterface();
+        $this->_jobFactory = new BaseFactory();
     }
 
     public function setJobPerformer(JobPerformerInterface $performer) {

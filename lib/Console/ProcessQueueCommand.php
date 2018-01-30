@@ -2,7 +2,7 @@
 namespace Queueing\Console;
 
 use Queueing\{
-    BaseFactoryInterface,
+    BaseFactory,
     JobFactoryInterface,
     JobPerformerInterface,
     JobsQueueInterface,
@@ -29,7 +29,7 @@ class ProcessQueueCommand extends Command
 
     public function __construct($name = null) {
         parent::__construct($name);
-        $this->factory = new BaseFactoryInterface();
+        $this->factory = new BaseFactory();
     }
 
     public function setPerformer(JobPerformerInterface $performer) {
