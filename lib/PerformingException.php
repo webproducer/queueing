@@ -4,15 +4,12 @@ namespace Queueing;
 
 class PerformingException extends Exception
 {
+    use CreateFromExceptionTrait;
+
     private $needRepeat = false;
     private $repeatDelay = 0;
     /** @var JobInterface */
     private $job = null;
-
-    public static function createFromException(\Throwable $e): self
-    {
-        return (new self($e->getMessage(), intval($e->getCode()), $e));
-    }
 
     public function getJob(): JobInterface
     {

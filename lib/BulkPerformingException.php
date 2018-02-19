@@ -4,33 +4,10 @@ namespace Queueing;
 
 class BulkPerformingException extends Exception
 {
-    /** @var \Throwable */
-    private $e;
+    use CreateFromExceptionTrait;
+
     /** @var BulkPerformingResult */
     private $result;
-
-    public static function createFromException(\Throwable $e): self
-    {
-         return (new self($e->getMessage(), intval($e->getCode()), $e))->setSrcException($e);
-    }
-
-    /**
-     * @return \Throwable
-     */
-    public function getSrcException(): \Throwable
-    {
-        return $this->e;
-    }
-
-    /**
-     * @param \Throwable $e
-     * @return self
-     */
-    public function setSrcException(\Throwable $e): self
-    {
-        $this->e = $e;
-        return $this;
-    }
 
     /**
      * @return BulkPerformingResult
