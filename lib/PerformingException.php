@@ -1,9 +1,11 @@
 <?php
-namespace Queueing;
 
+namespace Queueing;
 
 class PerformingException extends Exception
 {
+    use CreateFromExceptionTrait;
+
     private $needRepeat = false;
     private $repeatDelay = 0;
     /** @var JobInterface */
@@ -35,5 +37,4 @@ class PerformingException extends Exception
     {
         return $this->repeatDelay;
     }
-
 }
