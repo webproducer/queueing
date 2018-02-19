@@ -1,15 +1,18 @@
 <?php
-namespace Queueing;
 
+namespace Queueing;
 
 class BulkPerformingException extends Exception
 {
-
     /** @var \Throwable */
     private $e;
-
     /** @var BulkPerformingResult */
     private $result;
+
+    public static function createFromException(\Throwable $e): self
+    {
+         return (new self($e->getMessage(), intval($e->getCode()), $e))->setSrcException($e);
+    }
 
     /**
      * @return \Throwable
@@ -46,9 +49,4 @@ class BulkPerformingException extends Exception
         $this->result = $result;
         return $this;
     }
-
-
-
-
-
 }

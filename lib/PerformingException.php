@@ -1,6 +1,6 @@
 <?php
-namespace Queueing;
 
+namespace Queueing;
 
 class PerformingException extends Exception
 {
@@ -8,6 +8,11 @@ class PerformingException extends Exception
     private $repeatDelay = 0;
     /** @var JobInterface */
     private $job = null;
+
+    public static function createFromException(\Throwable $e): self
+    {
+        return (new self($e->getMessage(), intval($e->getCode()), $e));
+    }
 
     public function getJob(): JobInterface
     {
@@ -35,5 +40,4 @@ class PerformingException extends Exception
     {
         return $this->repeatDelay;
     }
-
 }
