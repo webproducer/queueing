@@ -8,7 +8,7 @@ use Queueing\{
     JobsQueueInterface,
     QueueProcessor
 };
-use Queueing\Pheanstalk\JobsQueue;
+use Queueing\Backends\Beanstalk\Queue;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\{
     InputInterface,
@@ -92,7 +92,7 @@ class ProcessQueueCommand extends Command
                     parse_str($dsn['query'], $q);
                     $queue = $q['queue'] ?? 'default';
                 }
-                return new JobsQueue($queue, $dsn['host'], $dsn['port'] ?? 11300);
+                return new Queue($queue, $dsn['host'], $dsn['port'] ?? 11300);
             default:
                 throw new \InvalidArgumentException("Unknown backend: {$dsn['scheme']}");
         }

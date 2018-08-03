@@ -19,7 +19,8 @@
     "php" : ">=7.1"
   },
   "suggest": {
-    "pda/pheanstalk": "To use beanstalkd as backend",
-    "symfony/console": "To run console queue processing command"
+    "symfony/console": "To run console queue processing command",
+    "pda/pheanstalk": "To use beanstalkd as backend (sync mode)",
+    "amphp/beanstalk": "To use beanstalkd as backend (async mode)"
   }
 }

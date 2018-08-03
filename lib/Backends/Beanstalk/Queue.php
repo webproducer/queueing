@@ -1,12 +1,12 @@
 <?php
-namespace Queueing\Pheanstalk;
+namespace Queueing\Backends\Beanstalk;
 
 use Queueing\JobsQueueInterface;
 use Pheanstalk\{
     Job,Pheanstalk
 };
 
-class JobsQueue implements JobsQueueInterface
+class Queue implements JobsQueueInterface
 {
 
     /** @var Pheanstalk */
