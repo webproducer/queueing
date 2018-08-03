@@ -17,6 +17,8 @@ class Queue implements JobsQueueInterface
     private $_host = '127.0.0.1';
     private $_port = 11300;
 
+    private $_ttr = self::DEFAULT_TTR;
+
     private $_delay = 0;
 
     /**
@@ -62,7 +64,7 @@ class Queue implements JobsQueueInterface
     /**
      * @inheritdoc
      */
-    public function reserve(int $timeout = null): array {
+    public function reserve(int $timeout = null) {
         $this->_checkConnection();
         $rawJob = $this->_client->reserve($timeout);
         if (!$rawJob) {
@@ -79,7 +81,7 @@ class Queue implements JobsQueueInterface
         int $priority = self::DEFAULT_PRI,
         int $delaySeconds = 0,
         int $ttr = self::DEFAULT_TTR
-    ): int {
+    ) {
         $this->_checkConnection();
         return $this->_client->put(
             $payload,

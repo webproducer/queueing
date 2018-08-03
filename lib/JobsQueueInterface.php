@@ -1,6 +1,7 @@
 <?php
 namespace Queueing;
 
+use Amp\Promise;
 
 interface JobsQueueInterface
 {
@@ -12,9 +13,9 @@ interface JobsQueueInterface
      * Wait [timeout] for ready job to reserve
      *
      * @param int|null $timeout
-     * @return array - [$jobId, $payload]
+     * @return array|Promise - [$jobId, $payload] (or Promise that wiil be resolved with same array)
      */
-    function reserve(int $timeout = null): array;
+    public function reserve(int $timeout = null);
 
     /**
      * Add new job
@@ -23,35 +24,38 @@ interface JobsQueueInterface
      * @param int $priority
      * @param int $delaySeconds
      * @param int $ttr
-     * @return int - Created Job id
+     * @return int|Promise - Created Job id (or Promise that will be resolved with id)
      */
-    function add(
+    public function add(
         string $payload,
         int $priority = self::DEFAULT_PRI,
         int $delaySeconds = 0,
         int $ttr = self::DEFAULT_TTR
-    ): int;
+    );
 
     /**
      * Return job back to queue
      *
      * @param int $id
      * @param int $delaySeconds
+     * @return void|Promise
      */
-    function release(int $id, int $delaySeconds = 0);
+    public function release(int $id, int $delaySeconds = 0);
 
     /**
      * Delete job
      *
      * @param int $id
+     * @return void|Promise
      */
-    function delete(int $id);
+    public function delete(int $id);
 
     /**
      * Bury (fail) job
      *
      * @param int $id
+     * @return void|Promise
      */
-    function bury(int $id);
+    public function bury(int $id);
 
 }
