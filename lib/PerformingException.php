@@ -1,5 +1,4 @@
 <?php
-
 namespace Queueing;
 
 class PerformingException extends Exception

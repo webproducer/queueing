@@ -2,6 +2,11 @@
 
 namespace Queueing;
 
+/**
+ * Class BulkPerformingException
+ * @package Queueing
+ * @deprecated - Use PerformingResult class instead
+ */
 class BulkPerformingException extends Exception
 {
     use CreateFromExceptionTrait;

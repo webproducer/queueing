@@ -1,7 +1,9 @@
 <?php
 namespace Queueing;
 
-use Amp\{ Iterator, Promise };
+use Amp\{
+    Iterator, Promise
+};
 
 
 /**
