@@ -16,14 +16,18 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     private $emitter;
     private $results = [];
     private $exitPromise;
+    /** @var JobFactoryInterface */
+    private $jobFactory;
 
     /**
      * AbstractJobsQueueSubscriber constructor.
      * @param JobsQueueInterface $queue
+     * @param JobFactoryInterface|null $jobFactory
      */
-    public function __construct(JobsQueueInterface $queue)
+    public function __construct(JobsQueueInterface $queue, JobFactoryInterface $jobFactory = null)
     {
         $this->queue = $queue;
+        $this->jobFactory = $jobFactory ?: new BaseFactory();
     }
 
     /**
@@ -32,6 +36,14 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     public function getQueue(): JobsQueueInterface
     {
         return $this->queue;
+    }
+
+    /**
+     * @return JobFactoryInterface
+     */
+    public function getJobFactory(): JobFactoryInterface
+    {
+        return $this->jobFactory;
     }
 
     public function sendResult(PerformingResult $result): Promise
@@ -57,6 +69,13 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     protected function nextJob($timeout = null): Promise
     {
         return first([$this->getQueue()->reserve($timeout), $this->exited()]);
+    }
+
+    protected function makeJob(array $jobData): JobInterface
+    {
+        [$id, $payload] = $jobData;
+        //TODO: handle JobCreatingException?
+        return $this->jobFactory->makeJob($id, $payload);
     }
 
     protected function emit($value): Promise
