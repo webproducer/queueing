@@ -1,7 +1,11 @@
 <?php
 namespace Queueing;
 
-
+/**
+ * Class BulkPerformingResult
+ * @package Queueing
+ * @deprecated - Use PerformingResult class instead
+ */
 class BulkPerformingResult
 {
     private $done = [];
