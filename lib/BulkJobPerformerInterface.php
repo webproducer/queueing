@@ -1,15 +1,16 @@
 <?php
 namespace Queueing;
 
+use Amp\Promise;
 
-interface BulkJobPerformerInterface
+
+interface BulkJobPerformerInterface extends JobPerformerInterface
 {
 
     /**
-     * @param JobInterface[] $jobs
-     * @return BulkPerformingResult
-     * @throws BulkPerformingException
+     * @param Bulk $jobs
+     * @return PerformingResult|Promise
      */
-    public function bulkPerform(array $jobs): BulkPerformingResult;
+    public function bulkPerform(Bulk $jobs);
 
 }

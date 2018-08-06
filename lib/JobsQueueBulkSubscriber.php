@@ -27,16 +27,24 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
             while ($jobData = yield $this->nextJob()) {
                 $jobs[] = $jobData;
                 if (count($jobs) === $this->portion) {
-                    yield $this->emit($jobs);
+                    yield $this->emit($this->makeList($jobs));
                     $jobs = [];
                 }
             }
             if (!empty($jobs)) {
-                yield $this->emit($jobs);
+                yield $this->emit($this->makeList($jobs));
             }
             $this->complete();
         });
         return $this->makeSubscription();
+    }
+
+    private function makeList(array $jobDescs): Bulk
+    {
+        return new Bulk(array_map(function($jobDesc) {
+            //TODO: handle JobCreatingException?
+            return $this->makeJob($jobDesc);
+        }, $jobDescs));
     }
 
 

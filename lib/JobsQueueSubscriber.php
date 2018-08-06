@@ -12,7 +12,7 @@ class JobsQueueSubscriber extends AbstractJobsQueueSubscriber //implements Subsc
         asyncCall(function() {
             //TODO: use timeout to cancel Promise returned by reserve() on exiting?
             while ($jobData = yield $this->nextJob()) {
-                yield $this->emit($jobData);
+                yield $this->emit($this->makeJob($jobData));
             }
             $this->complete();
         });
