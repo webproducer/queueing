@@ -34,12 +34,12 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
                 $lastJobAt = $this->getMoment();
                 $jobs[] = $jobData;
                 if ($this->isReadyToEmit(count($jobs), $lastJobAt)) {
-                    yield $this->emit($this->makeList($jobs));
+                    yield $this->emitAndProcess($this->makeList($jobs));
                     $jobs = [];
                 }
             }
             if (!empty($jobs)) {
-                yield $this->emit($this->makeList($jobs));
+                yield $this->emitAndProcess($this->makeList($jobs));
             }
             $this->complete();
         });

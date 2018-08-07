@@ -4,7 +4,7 @@ namespace Queueing;
 use function Amp\asyncCall;
 
 
-class JobsQueueSubscriber extends AbstractJobsQueueSubscriber //implements SubscriberInterface
+class JobsQueueSubscriber extends AbstractJobsQueueSubscriber
 {
 
     public function subscribe(): Subscription
@@ -12,7 +12,7 @@ class JobsQueueSubscriber extends AbstractJobsQueueSubscriber //implements Subsc
         asyncCall(function() {
             //TODO: use timeout to cancel Promise returned by reserve() on exiting?
             while ($jobData = yield $this->nextJob()) {
-                yield $this->emit($this->makeJob($jobData));
+                yield $this->emitAndProcess($this->makeJob($jobData));
             }
             $this->complete();
         });

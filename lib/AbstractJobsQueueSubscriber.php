@@ -48,7 +48,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
 
     public function sendResult(PerformingResult $result): Promise
     {
-        $this->results = [$def = new Deferred(), $result];
+        $this->results[] = [$def = new Deferred(), $result];
         return $def->promise();
     }
 
@@ -78,7 +78,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
         return $this->jobFactory->makeJob($id, $payload);
     }
 
-    protected function emit($value): Promise
+    protected function emitAndProcess($value): Promise
     {
         return call(function() use ($value) {
             yield $this->emitter->emit($value);
@@ -108,8 +108,13 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     private function processResults(): Promise
     {
         return call(function () {
-            foreach ($this->results as $result) {
+            /**
+             * @var Deferred $def
+             * @var PerformingResult $result
+             */
+            foreach ($this->results as [$def, $result]) {
                 yield $this->processResult($result);
+                $def->resolve();
             }
             $this->results = [];
         });

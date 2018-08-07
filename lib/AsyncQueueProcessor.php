@@ -50,7 +50,7 @@ class AsyncQueueProcessor
         $this->subscription = $subscriber->subscribe();
         return call(function() use ($subscriber) {
             while (yield $this->subscription->advance()) {
-                yield $subscriber->sendResult(
+                $subscriber->sendResult(
                     yield $this->perform($this->subscription->getCurrent())
                 );
             }
