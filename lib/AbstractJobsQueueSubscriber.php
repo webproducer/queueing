@@ -78,7 +78,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
         return $this->jobFactory->makeJob($id, $payload);
     }
 
-    protected function emit($value): Promise
+    protected function emitAndProcess($value): Promise
     {
         return call(function() use ($value) {
             yield $this->emitter->emit($value);
