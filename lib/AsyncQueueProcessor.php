@@ -34,9 +34,19 @@ class AsyncQueueProcessor
         $this->jobFactory = $jobFactory ?: new BaseFactory();
     }
 
-    public function process(JobsQueueInterface $queue, int $bulkSize = 1): Promise
+    /**
+     * @param JobsQueueInterface $queue
+     * @param int $bulkSize - Max count of jobs in bulk
+     * @param int $bulkMaxWaitTime - Max bulk awaiting time (in milliseconds)
+     * @return Promise
+     */
+    public function process(
+        JobsQueueInterface $queue,
+        int $bulkSize = 1,
+        int $bulkMaxWaitTime = 0
+    ): Promise
     {
-        $subscriber = $this->makeSubscriber($queue, $bulkSize);
+        $subscriber = $this->makeSubscriber($queue, $bulkSize, $bulkMaxWaitTime);
         $this->subscription = $subscriber->subscribe();
         return call(function() use ($subscriber) {
             while (yield $this->subscription->advance()) {
@@ -51,10 +61,16 @@ class AsyncQueueProcessor
         $this->subscription->cancel();
     }
 
-    private function makeSubscriber(JobsQueueInterface $queue, int $bulkSize): AbstractJobsQueueSubscriber
+    private function makeSubscriber(
+        JobsQueueInterface $queue,
+        int $bulkSize,
+        int $bulkWaitTime
+    ): AbstractJobsQueueSubscriber
     {
         if ($bulkSize > 1) {
-            return (new JobsQueueBulkSubscriber($queue, $this->jobFactory))->setBulkSize($bulkSize);
+            return (new JobsQueueBulkSubscriber($queue, $this->jobFactory))
+                ->setBulkSize($bulkSize)
+                ->setBulkMaxWaitTime($bulkWaitTime);
         }
         return new JobsQueueSubscriber($queue, $this->jobFactory);
     }
