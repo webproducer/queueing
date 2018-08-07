@@ -6,12 +6,12 @@ use function Amp\asyncCall;
 /**
  * Class JobsQueueBulkSubscriber
  * @package Queueing
- * @todo Add max wait time?
  */
 class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 {
 
     private $portion = 1;
+    private $waitTime = 0;
 
     public function setBulkSize(int $size): self
     {
@@ -19,14 +19,21 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
         return $this;
     }
 
+    public function setBulkMaxWaitTime(int $milliseconds): self
+    {
+        $this->waitTime = $milliseconds;
+        return $this;
+    }
+
     public function subscribe(): Subscription
     {
         asyncCall(function () {
             //TODO: use timeout to cancel Promise returned by reserve() on exiting?
-            $jobs[] = [];
+            $jobs = [];
             while ($jobData = yield $this->nextJob()) {
+                $lastJobAt = $this->getMoment();
                 $jobs[] = $jobData;
-                if (count($jobs) === $this->portion) {
+                if ($this->isReadyToEmit(count($jobs), $lastJobAt)) {
                     yield $this->emit($this->makeList($jobs));
                     $jobs = [];
                 }
@@ -39,12 +46,23 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
         return $this->makeSubscription();
     }
 
+    private function isReadyToEmit(int $jobsCount, int $lastJobAt): bool
+    {
+        return ($jobsCount === $this->portion) ||
+            ($this->waitTime && (($this->getMoment() - $lastJobAt) > $this->waitTime));
+    }
+
     private function makeList(array $jobDescs): Bulk
     {
         return new Bulk(array_map(function($jobDesc) {
             //TODO: handle JobCreatingException?
             return $this->makeJob($jobDesc);
         }, $jobDescs));
+    }
+
+    private function getMoment(): int
+    {
+        return intval(microtime(true) * 1000);
     }
 
 
