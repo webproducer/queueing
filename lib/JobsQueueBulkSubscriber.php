@@ -1,7 +1,11 @@
 <?php
 namespace Queueing;
 
-use function Amp\asyncCall;
+use Amp\{ Promise, Delayed };
+
+use function Amp\{ call, asyncCall };
+use function Amp\Promise\first;
+
 
 /**
  * Class JobsQueueBulkSubscriber
@@ -10,8 +14,11 @@ use function Amp\asyncCall;
 class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 {
 
+    const TIMED_OUT = 'TIMED_OUT';
+
     private $portion = 1;
     private $waitTime = 0;
+    private $jobWaitPromise;
 
     public function setBulkSize(int $size): self
     {
@@ -28,12 +35,13 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
     public function subscribe(): Subscription
     {
         asyncCall(function () {
-            //TODO: use timeout to cancel Promise returned by reserve() on exiting?
             $jobs = [];
-            while ($jobData = yield $this->nextJob()) {
-                $lastJobAt = $this->getMoment();
-                $jobs[] = $jobData;
-                if ($this->isReadyToEmit(count($jobs), $lastJobAt)) {
+            while ($jobData = yield $this->waitJobWithTimeout()) {
+                if ($jobData !== self::TIMED_OUT) {
+                    $jobs[] = $jobData;
+                }
+                $jobsCnt = count($jobs);
+                if ($jobsCnt && (($jobsCnt === $this->portion) || ($jobData === self::TIMED_OUT))) {
                     yield $this->emitAndProcess($this->makeList($jobs));
                     $jobs = [];
                 }
@@ -46,10 +54,21 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
         return $this->makeSubscription();
     }
 
-    private function isReadyToEmit(int $jobsCount, int $lastJobAt): bool
+    private function waitJobWithTimeout(): Promise
     {
-        return ($jobsCount === $this->portion) ||
-            ($this->waitTime && (($this->getMoment() - $lastJobAt) > $this->waitTime));
+        return call(function() {
+            if (!$this->jobWaitPromise) {
+                $this->jobWaitPromise = $this->nextJob();
+            }
+            $flag = yield first([
+                $this->jobWaitPromise,
+                new Delayed($this->waitTime, self::TIMED_OUT)
+            ]);
+            if ($flag !== TIMEOUT_FLAG) {
+                $this->jobWaitPromise = null;
+            }
+            return $flag;
+        });
     }
 
     private function makeList(array $jobDescs): Bulk
@@ -59,11 +78,5 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
             return $this->makeJob($jobDesc);
         }, $jobDescs));
     }
-
-    private function getMoment(): int
-    {
-        return intval(microtime(true) * 1000);
-    }
-
 
 }
