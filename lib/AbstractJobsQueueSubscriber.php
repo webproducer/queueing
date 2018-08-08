@@ -4,7 +4,6 @@ namespace Queueing;
 use Amp\{ Promise, Emitter, Delayed, Deferred };
 
 use function Amp\call;
-use function Amp\Promise\first;
 
 
 abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
@@ -15,7 +14,6 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     /** @var Emitter */
     private $emitter;
     private $results = [];
-    private $exitPromise;
     /** @var JobFactoryInterface */
     private $jobFactory;
 
@@ -68,7 +66,19 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
 
     protected function nextJob($timeout = null): Promise
     {
-        return first([$this->getQueue()->reserve($timeout), $this->exited()]);
+        return call(function() use ($timeout) {
+            $result = null;
+            $this->getQueue()->reserve($timeout)->onResolve(function ($e, $value) use (&$result) {
+                $result = $e ?: $value;
+            });
+            while (!$this->isStopped && is_null($result)) {
+                yield new Delayed(50);
+            }
+            if ($result instanceof \Throwable) {
+                throw $result;
+            }
+            return $result;
+        });
     }
 
     protected function makeJob(array $jobData): JobInterface
@@ -89,20 +99,6 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     protected function complete()
     {
         $this->emitter->complete();
-        $this->exitPromise = null;
-    }
-
-    protected function exited(): Promise
-    {
-        if (!$this->exitPromise) {
-            $this->exitPromise = call(function () use (&$isStopped) {
-                while (!$this->isStopped) {
-                    yield new Delayed(50);
-                }
-                return false;
-            });
-        }
-        return $this->exitPromise;
     }
 
     private function processResults(): Promise
