@@ -64,7 +64,7 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
                 $this->jobWaitPromise,
                 new Delayed($this->waitTime, self::TIMED_OUT)
             ]);
-            if ($flag !== TIMEOUT_FLAG) {
+            if ($flag !== self::TIMED_OUT) {
                 $this->jobWaitPromise = null;
             }
             return $flag;
