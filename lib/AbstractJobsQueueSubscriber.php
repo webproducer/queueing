@@ -66,6 +66,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
 
     protected function nextJob($timeout = null): Promise
     {
+        //TODO: implement through foreign lib func
         return call(function() use ($timeout) {
             $result = null;
             $this->getQueue()->reserve($timeout)->onResolve(function ($e, $value) use (&$result) {

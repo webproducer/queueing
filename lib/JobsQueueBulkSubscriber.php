@@ -57,6 +57,7 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 
     private function nextJobWithDeadline(): Promise
     {
+        //TODO: implement through foreign lib func
         return call(function() {
             $result = null;
             $this->nextJob($this->waitTime)->onResolve(function($e, $value) use (&$result) {
