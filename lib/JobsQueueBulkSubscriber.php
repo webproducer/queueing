@@ -1,10 +1,9 @@
 <?php
 namespace Queueing;
 
-use Amp\{ Promise, Delayed };
+use Amp\{Beanstalk\TimedOutException, Promise, Delayed};
 
 use function Amp\{ call, asyncCall };
-use function Amp\Promise\first;
 
 
 /**
@@ -18,7 +17,6 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 
     private $portion = 1;
     private $waitTime = 0;
-    private $jobWaitPromise;
 
     public function setBulkSize(int $size): self
     {
@@ -28,7 +26,10 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 
     public function setBulkMaxWaitTime(int $milliseconds): self
     {
-        $this->waitTime = $milliseconds;
+        $this->waitTime = intval(round($milliseconds/1000));
+        if ($this->waitTime < 1) {
+            $this->waitTime = 1;
+        }
         return $this;
     }
 
@@ -36,7 +37,7 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
     {
         asyncCall(function () {
             $jobs = [];
-            while ($jobData = yield $this->waitJobWithTimeout()) {
+            while ($jobData = yield $this->nextJobWithDeadline()) {
                 if ($jobData !== self::TIMED_OUT) {
                     $jobs[] = $jobData;
                 }
@@ -54,20 +55,25 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
         return $this->makeSubscription();
     }
 
-    private function waitJobWithTimeout(): Promise
+    private function nextJobWithDeadline(): Promise
     {
+        //TODO: implement through foreign lib func
         return call(function() {
-            if (!$this->jobWaitPromise) {
-                $this->jobWaitPromise = $this->nextJob();
+            $result = null;
+            $this->nextJob($this->waitTime)->onResolve(function($e, $value) use (&$result) {
+                $result = $e ?: $value;
+            });
+            while (is_null($result)) {
+                yield new Delayed(50);
             }
-            $flag = yield first([
-                $this->jobWaitPromise,
-                new Delayed($this->waitTime, self::TIMED_OUT)
-            ]);
-            if ($flag !== self::TIMED_OUT) {
-                $this->jobWaitPromise = null;
+            switch (true) {
+                case $result instanceof TimedOutException:
+                    return self::TIMED_OUT;
+                case $result instanceof \Throwable:
+                    throw $result;
+                default:
+                    return $result;
             }
-            return $flag;
         });
     }
 
