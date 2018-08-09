@@ -13,8 +13,6 @@ use function Amp\{ call, asyncCall };
 class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 {
 
-    const TIMED_OUT = 'TIMED_OUT';
-
     private $portion = 1;
     private $waitTime = 0;
 
@@ -57,7 +55,7 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 
     private function nextJobWithDeadline(): Promise
     {
-        //TODO: implement through foreign lib func
+        //TODO: implement through foreign lib func?
         return call(function() {
             $result = null;
             $this->nextJob($this->waitTime)->onResolve(function($e, $value) use (&$result) {
@@ -66,14 +64,10 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
             while (is_null($result)) {
                 yield new Delayed(50);
             }
-            switch (true) {
-                case $result instanceof TimedOutException:
-                    return self::TIMED_OUT;
-                case $result instanceof \Throwable:
-                    throw $result;
-                default:
-                    return $result;
+            if ($result instanceof \Throwable) {
+                throw $result;
             }
+            return $result;
         });
     }
 
