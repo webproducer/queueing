@@ -35,7 +35,7 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
     {
         asyncCall(function () {
             $jobs = [];
-            while ($jobData = yield $this->nextJobWithDeadline()) {
+            while ($jobData = yield $this->nextJob($this->waitTime)) {
                 if ($jobData !== self::TIMED_OUT) {
                     $jobs[] = $jobData;
                 }
@@ -51,24 +51,6 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
             $this->complete();
         });
         return $this->makeSubscription();
-    }
-
-    private function nextJobWithDeadline(): Promise
-    {
-        //TODO: implement through foreign lib func?
-        return call(function() {
-            $result = null;
-            $this->nextJob($this->waitTime)->onResolve(function($e, $value) use (&$result) {
-                $result = $e ?: $value;
-            });
-            while (is_null($result)) {
-                yield new Delayed(50);
-            }
-            if ($result instanceof \Throwable) {
-                throw $result;
-            }
-            return $result;
-        });
     }
 
     private function makeList(array $jobDescs): Bulk
