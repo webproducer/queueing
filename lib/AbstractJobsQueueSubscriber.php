@@ -72,8 +72,11 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
             $this->getQueue()->reserve($timeout)->onResolve(function ($e, $value) use (&$result) {
                 $result = $e ?: (is_null($value) ? self::TIMED_OUT : $value);
             });
+            $delay = 5;
+            $maxDelay = 100;
             while (!$this->isStopped && is_null($result)) {
-                yield new Delayed(50);
+                //TODO: can we do this more effective way?
+                yield new Delayed(($delay === $maxDelay) ? $maxDelay : $delay++);
             }
             if ($result instanceof \Throwable) {
                 throw $result;
