@@ -6,10 +6,12 @@ use Amp\Beanstalk\BeanstalkClient;
 use Amp\Beanstalk\TimedOutException;
 use Amp\Promise;
 use Amp\Success;
+use Queueing\ClosableInterface;
 use Queueing\JobsQueueInterface;
+use function Amp\asyncCall;
 use function Amp\call;
 
-class AsyncQueue implements JobsQueueInterface
+class AsyncQueue implements JobsQueueInterface, ClosableInterface
 {
     /** @var BeanstalkClient */
     private $cli;
@@ -105,6 +107,15 @@ class AsyncQueue implements JobsQueueInterface
             yield $this->cli->use($this->tube);
             yield $this->cli->watch($this->tube);
             return $this->cli;
+        });
+    }
+
+    public function close()
+    {
+        asyncCall(function () {
+            /** @var BeanstalkClient $cli */
+            $cli = yield $this->getCli();
+            $cli->quit();
         });
     }
 }
