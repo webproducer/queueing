@@ -16,11 +16,14 @@
     }
   },
   "require": {
-    "php" : ">=7.1"
+    "php": ">=7.1"
   },
   "suggest": {
     "symfony/console": "To run console queue processing command",
     "pda/pheanstalk": "To use beanstalkd as backend (sync mode)",
     "amphp/beanstalk": "To use beanstalkd as backend (async mode)"
+  },
+  "require-dev": {
+    "amphp/beanstalk": "^0.2.3"
   }
 }
