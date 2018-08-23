@@ -8,7 +8,6 @@ use Amp\Promise;
 use Amp\Success;
 use Queueing\ClosableInterface;
 use Queueing\JobsQueueInterface;
-use function Amp\asyncCall;
 use function Amp\call;
 
 class AsyncQueue implements JobsQueueInterface, ClosableInterface
@@ -94,6 +93,14 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
         });
     }
 
+    public function close()
+    {
+        if ($this->cli) {
+            $this->cli->quit();
+            $this->cli = null;
+        }
+    }
+
     private function getCli(): Promise
     {
         if ($this->cli) {
@@ -107,15 +114,6 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
             yield $this->cli->use($this->tube);
             yield $this->cli->watch($this->tube);
             return $this->cli;
-        });
-    }
-
-    public function close()
-    {
-        asyncCall(function () {
-            /** @var BeanstalkClient $cli */
-            $cli = yield $this->getCli();
-            $cli->quit();
         });
     }
 }
