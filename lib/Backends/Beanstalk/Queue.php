@@ -3,12 +3,12 @@
 namespace Queueing\Backends\Beanstalk;
 
 use Queueing\JobsQueueInterface;
-use Pheanstalk\{
-    Job, Pheanstalk
-};
+use Pheanstalk\{Exception\DeadlineSoonException, Job, Pheanstalk};
 
 class Queue implements JobsQueueInterface
 {
+    use TimeoutTrait;
+
     /** @var Pheanstalk */
     private $client = null;
     private $tubeName = 'default';
@@ -63,11 +63,16 @@ class Queue implements JobsQueueInterface
 
     /**
      * @inheritdoc
+     * @throws DeadlineSoonException
      */
     public function reserve(int $timeout = null)
     {
         $this->checkConnection();
-        $rawJob = $this->client->reserve($timeout);
+        if (is_null($timeout)) {
+            $rawJob = $this->client->reserve();
+        } else {
+            $rawJob = $this->client->reserveWithTimeout($this->millisecondsToSeconds($timeout));
+        }
         if (!$rawJob) {
             return [0, null];
         }

@@ -12,6 +12,8 @@ use function Amp\call;
 
 class AsyncQueue implements JobsQueueInterface, ClosableInterface
 {
+    use TimeoutTrait;
+
     /** @var BeanstalkClient */
     private $cli;
     private $host = '127.0.0.1';
@@ -34,7 +36,7 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
             /** @var BeanstalkClient $cli */
             $cli = yield $this->getCli();
             try {
-                return yield $cli->reserve($timeout);
+                return yield $cli->reserve($this->millisecondsToSeconds($timeout));
             } catch (TimedOutException $e) {
                 return null;
             }
