@@ -1,14 +1,11 @@
 <?php
+
 namespace Queueing;
 
-use Amp\{Beanstalk\TimedOutException, Promise, Delayed};
-
-use function Amp\{ call, asyncCall };
-
+use function Amp\asyncCall;
 
 /**
  * Class JobsQueueBulkSubscriber
- * @package Queueing
  */
 class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 {
@@ -24,7 +21,7 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 
     public function setBulkMaxWaitTime(int $milliseconds): self
     {
-        $this->waitTime = intval(round($milliseconds/1000));
+        $this->waitTime = intval(round($milliseconds / 1000));
         if ($this->waitTime < 1) {
             $this->waitTime = 1;
         }
@@ -55,7 +52,7 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 
     private function makeList(array $jobDescs): Bulk
     {
-        return new Bulk(array_map(function($jobDesc) {
+        return new Bulk(array_map(function ($jobDesc) {
             //TODO: handle JobCreatingException?
             return $this->makeJob($jobDesc);
         }, $jobDescs));
