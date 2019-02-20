@@ -1,25 +1,21 @@
 <?php
+
 namespace Queueing\Backends\Beanstalk;
 
 use Queueing\JobsQueueInterface;
 use Pheanstalk\{
-    Job,Pheanstalk
+    Job, Pheanstalk
 };
 
 class Queue implements JobsQueueInterface
 {
-
     /** @var Pheanstalk */
-    private $_client = null;
-
-    private $_tubeName = 'default';
-
-    private $_host = '127.0.0.1';
-    private $_port = 11300;
-
-    private $_ttr = self::DEFAULT_TTR;
-
-    private $_delay = 0;
+    private $client = null;
+    private $tubeName = 'default';
+    private $host = '127.0.0.1';
+    private $port = 11300;
+    private $ttr = self::DEFAULT_TTR;
+    private $delay = 0;
 
     /**
      * JobsQueue constructor.
@@ -27,19 +23,21 @@ class Queue implements JobsQueueInterface
      * @param string $host
      * @param string $port
      */
-    public function __construct(string $tubeName = 'default', string $host = '127.0.0.1', string $port = '11300') {
-        $this->_tubeName = $tubeName;
-        $this->_host = $host;
-        $this->_port = $port;
+    public function __construct(string $tubeName = 'default', string $host = '127.0.0.1', string $port = '11300')
+    {
+        $this->tubeName = $tubeName;
+        $this->host = $host;
+        $this->port = $port;
     }
 
     /**
      * @param Pheanstalk $client
      * @return JobsQueueInterface
      */
-    public static function createWithClient(Pheanstalk $client) {
+    public static function createWithClient(Pheanstalk $client)
+    {
         $q = new self();
-        $q->_client = $client;
+        $q->client = $client;
         return $q;
     }
 
@@ -47,8 +45,9 @@ class Queue implements JobsQueueInterface
      * @param int $delay Put delay
      * @return self
      */
-    public function setDelay($delay) {
-        $this->_delay = $delay;
+    public function setDelay($delay)
+    {
+        $this->delay = $delay;
         return $this;
     }
 
@@ -56,17 +55,19 @@ class Queue implements JobsQueueInterface
      * @param int $ttr Time to process job after reserving
      * @return self
      */
-    public function setTtr($ttr) {
-        $this->_ttr = $ttr;
+    public function setTtr($ttr)
+    {
+        $this->ttr = $ttr;
         return $this;
     }
 
     /**
      * @inheritdoc
      */
-    public function reserve(int $timeout = null) {
-        $this->_checkConnection();
-        $rawJob = $this->_client->reserve($timeout);
+    public function reserve(int $timeout = null)
+    {
+        $this->checkConnection();
+        $rawJob = $this->client->reserve($timeout);
         if (!$rawJob) {
             return [0, null];
         }
@@ -82,8 +83,8 @@ class Queue implements JobsQueueInterface
         int $delaySeconds = 0,
         int $ttr = self::DEFAULT_TTR
     ) {
-        $this->_checkConnection();
-        return $this->_client->put(
+        $this->checkConnection();
+        return $this->client->put(
             $payload,
             $priority,
             $delaySeconds,
@@ -94,9 +95,10 @@ class Queue implements JobsQueueInterface
     /**
      * @inheritDoc
      */
-    public function release(int $id, int $delaySeconds = 0) {
-        $this->_checkConnection();
-        $this->_client->release(
+    public function release(int $id, int $delaySeconds = 0)
+    {
+        $this->checkConnection();
+        $this->client->release(
             new Job($id, null),
             self::DEFAULT_PRI,
             $delaySeconds
@@ -107,25 +109,27 @@ class Queue implements JobsQueueInterface
     /**
      * @inheritdoc
      */
-    public function delete(int $id) {
-        $this->_checkConnection();
-        $this->_client->delete(new Job($id, null));
+    public function delete(int $id)
+    {
+        $this->checkConnection();
+        $this->client->delete(new Job($id, null));
     }
 
     /**
      * @inheritdoc
      */
-    public function bury(int $id) {
-        $this->_checkConnection();
-        $this->_client->bury(new Job($id, null));
+    public function bury(int $id)
+    {
+        $this->checkConnection();
+        $this->client->bury(new Job($id, null));
     }
 
-    private function _checkConnection() {
-        if (is_null($this->_client)) {
-            $this->_client = new Pheanstalk($this->_host, $this->_port);
-            $this->_client->useTube($this->_tubeName);
-            $this->_client->watch($this->_tubeName);
+    private function checkConnection()
+    {
+        if (is_null($this->client)) {
+            $this->client = new Pheanstalk($this->host, $this->port);
+            $this->client->useTube($this->tubeName);
+            $this->client->watch($this->tubeName);
         }
     }
-
 }
