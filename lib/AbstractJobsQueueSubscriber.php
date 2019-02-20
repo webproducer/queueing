@@ -15,6 +15,8 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     private $results = [];
     /** @var JobFactoryInterface */
     private $jobFactory;
+    /** @var int|null JobInterface|Bulk wait timeout in milliseconds */
+    protected $waitTime = null;
 
     /**
      * AbstractJobsQueueSubscriber constructor.
@@ -47,6 +49,14 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     {
         $this->results[] = [$def = new Deferred(), $result];
         return $def->promise();
+    }
+
+    /**
+     * @param int $milliseconds JobInterface|Bulk wait timeout in milliseconds
+     */
+    public function setMaxWaitTime(int $milliseconds): void
+    {
+        $this->waitTime = $milliseconds;
     }
 
     /**
