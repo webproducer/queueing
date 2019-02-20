@@ -12,9 +12,10 @@ class JobsQueueSubscriber extends AbstractJobsQueueSubscriber
     public function subscribe(): Subscription
     {
         asyncCall(function () {
-            //TODO: use timeout to cancel Promise returned by reserve() on exiting?
-            while ($jobData = yield $this->nextJob()) {
-                yield $this->emitAndProcess($this->makeJob($jobData));
+            while ($jobData = yield $this->nextJob($this->waitTime)) {
+                if ($jobData !== self::TIMED_OUT) {
+                    yield $this->emitAndProcess($this->makeJob($jobData));
+                }
             }
             $this->complete();
         });
