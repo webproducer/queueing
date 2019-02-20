@@ -1,20 +1,15 @@
 <?php
+
 namespace Queueing;
 
-use Amp\{Beanstalk\TimedOutException, Promise, Delayed};
-
-use function Amp\{ call, asyncCall };
-
+use function Amp\asyncCall;
 
 /**
  * Class JobsQueueBulkSubscriber
- * @package Queueing
  */
 class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 {
-
     private $portion = 1;
-    private $waitTime = 0;
 
     public function setBulkSize(int $size): self
     {
@@ -22,12 +17,14 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
         return $this;
     }
 
+    /**
+     * @param int $milliseconds
+     * @return JobsQueueBulkSubscriber
+     * @deprecated Use 'setMaxWaitTime' instead
+     */
     public function setBulkMaxWaitTime(int $milliseconds): self
     {
-        $this->waitTime = intval(round($milliseconds/1000));
-        if ($this->waitTime < 1) {
-            $this->waitTime = 1;
-        }
+        $this->setMaxWaitTime($milliseconds);
         return $this;
     }
 
@@ -35,14 +32,17 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
     {
         asyncCall(function () {
             $jobs = [];
+            $jobsCount = 0;
             while ($jobData = yield $this->nextJob($this->waitTime)) {
-                if ($jobData !== self::TIMED_OUT) {
+                $isTimedOut = $jobData === self::TIMED_OUT;
+                if (!$isTimedOut) {
                     $jobs[] = $jobData;
+                    ++$jobsCount;
                 }
-                $jobsCnt = count($jobs);
-                if ($jobsCnt && (($jobsCnt === $this->portion) || ($jobData === self::TIMED_OUT))) {
+                if ($jobsCount && (($jobsCount === $this->portion) || $isTimedOut)) {
                     yield $this->emitAndProcess($this->makeList($jobs));
                     $jobs = [];
+                    $jobsCount = 0;
                 }
             }
             if (!empty($jobs)) {
@@ -55,10 +55,9 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 
     private function makeList(array $jobDescs): Bulk
     {
-        return new Bulk(array_map(function($jobDesc) {
+        return new Bulk(array_map(function ($jobDesc) {
             //TODO: handle JobCreatingException?
             return $this->makeJob($jobDesc);
         }, $jobDescs));
     }
-
 }
