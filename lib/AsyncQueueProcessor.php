@@ -36,15 +36,15 @@ class AsyncQueueProcessor
     /**
      * @param JobsQueueInterface $queue
      * @param int $bulkSize - Max count of jobs in bulk
-     * @param int $bulkMaxWaitTime - Max bulk awaiting time (in milliseconds)
+     * @param int|null $maxWaitTime - Max bulk|job awaiting time (in milliseconds)
      * @return Promise
      */
     public function process(
         JobsQueueInterface $queue,
         int $bulkSize = 1,
-        int $bulkMaxWaitTime = 0
+        int $maxWaitTime = null
     ): Promise {
-        $subscriber = $this->makeSubscriber($queue, $bulkSize, $bulkMaxWaitTime);
+        $subscriber = $this->makeSubscriber($queue, $bulkSize, $maxWaitTime);
         $this->subscription = $subscriber->subscribe();
         return call(function () use ($subscriber) {
             while (yield $this->subscription->advance()) {
@@ -63,14 +63,14 @@ class AsyncQueueProcessor
     private function makeSubscriber(
         JobsQueueInterface $queue,
         int $bulkSize,
-        int $bulkWaitTime
+        int $maxWaitTime = null
     ): AbstractJobsQueueSubscriber {
         if ($bulkSize > 1) {
             return (new JobsQueueBulkSubscriber($queue, $this->jobFactory))
                 ->setBulkSize($bulkSize)
-                ->setBulkMaxWaitTime($bulkWaitTime);
+                ->setMaxWaitTime(intval($maxWaitTime));
         }
-        return new JobsQueueSubscriber($queue, $this->jobFactory);
+        return (new JobsQueueSubscriber($queue, $this->jobFactory))->setMaxWaitTime($maxWaitTime);
     }
 
     /**
