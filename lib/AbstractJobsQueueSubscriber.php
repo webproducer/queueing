@@ -53,10 +53,12 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
 
     /**
      * @param int $milliseconds JobInterface|Bulk wait timeout in milliseconds
+     * @return AbstractJobsQueueSubscriber
      */
-    public function setMaxWaitTime(int $milliseconds): void
+    public function setMaxWaitTime(int $milliseconds): self
     {
         $this->waitTime = $milliseconds;
+        return $this;
     }
 
     /**
