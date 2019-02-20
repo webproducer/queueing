@@ -9,9 +9,7 @@ use function Amp\asyncCall;
  */
 class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 {
-
     private $portion = 1;
-    private $waitTime = 0;
 
     public function setBulkSize(int $size): self
     {
@@ -19,12 +17,14 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
         return $this;
     }
 
+    /**
+     * @param int $milliseconds
+     * @return JobsQueueBulkSubscriber
+     * @deprecated Use 'setMaxWaitTime' instead
+     */
     public function setBulkMaxWaitTime(int $milliseconds): self
     {
-        $this->waitTime = intval(round($milliseconds / 1000));
-        if ($this->waitTime < 1) {
-            $this->waitTime = 1;
-        }
+        $this->setMaxWaitTime($milliseconds);
         return $this;
     }
 
@@ -57,5 +57,4 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
             return $this->makeJob($jobDesc);
         }, $jobDescs));
     }
-
 }
