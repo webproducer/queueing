@@ -24,6 +24,7 @@
     "amphp/beanstalk": "To use beanstalkd as backend (async mode)"
   },
   "require-dev": {
-    "amphp/beanstalk": "^0.2.3"
+    "amphp/beanstalk": "^0.2.3",
+    "pda/pheanstalk": "^4.0"
   }
 }
