@@ -1,21 +1,21 @@
 <?php
+
 namespace Queueing\Backends\Beanstalk;
 
 use Amp\Beanstalk\BeanstalkClient;
 use Amp\Beanstalk\TimedOutException;
 use Amp\Promise;
 use Amp\Success;
+use Queueing\ClosableInterface;
 use Queueing\JobsQueueInterface;
-
 use function Amp\call;
 
-
-class AsyncQueue implements JobsQueueInterface
+class AsyncQueue implements JobsQueueInterface, ClosableInterface
 {
+    use TimeoutTrait;
 
     /** @var BeanstalkClient */
     private $cli;
-
     private $host = '127.0.0.1';
     private $port = '11300';
     private $tube = 'default';
@@ -32,11 +32,11 @@ class AsyncQueue implements JobsQueueInterface
      */
     public function reserve(int $timeout = null)
     {
-        return call(function() use ($timeout) {
+        return call(function () use ($timeout) {
             /** @var BeanstalkClient $cli */
             $cli = yield $this->getCli();
             try {
-                return yield $cli->reserve($timeout);
+                return yield $cli->reserve($this->millisecondsToSeconds($timeout));
             } catch (TimedOutException $e) {
                 return null;
             }
@@ -52,7 +52,7 @@ class AsyncQueue implements JobsQueueInterface
         int $delaySeconds = 0,
         int $ttr = self::DEFAULT_TTR
     ) {
-        return call(function() use ($payload, $priority, $delaySeconds, $ttr) {
+        return call(function () use ($payload, $priority, $delaySeconds, $ttr) {
             /** @var BeanstalkClient $cli */
             $cli = yield $this->getCli();
             return yield $cli->put($payload, $ttr, $delaySeconds, $priority);
@@ -64,7 +64,7 @@ class AsyncQueue implements JobsQueueInterface
      */
     public function release(int $id, int $delaySeconds = 0)
     {
-        return call(function() use ($id, $delaySeconds) {
+        return call(function () use ($id, $delaySeconds) {
             /** @var BeanstalkClient $cli */
             $cli = yield $this->getCli();
             return yield $cli->release($id, $delaySeconds);
@@ -76,7 +76,7 @@ class AsyncQueue implements JobsQueueInterface
      */
     public function delete(int $id)
     {
-        return call(function() use ($id) {
+        return call(function () use ($id) {
             /** @var BeanstalkClient $cli */
             $cli = yield $this->getCli();
             return yield $cli->delete($id);
@@ -88,11 +88,19 @@ class AsyncQueue implements JobsQueueInterface
      */
     public function bury(int $id)
     {
-        return call(function() use ($id) {
+        return call(function () use ($id) {
             /** @var BeanstalkClient $cli */
             $cli = yield $this->getCli();
             return yield $cli->bury($id);
         });
+    }
+
+    public function close()
+    {
+        if ($this->cli) {
+            $this->cli->quit();
+            $this->cli = null;
+        }
     }
 
     private function getCli(): Promise
@@ -100,19 +108,14 @@ class AsyncQueue implements JobsQueueInterface
         if ($this->cli) {
             return new Success($this->cli);
         }
-        $this->cli = new BeanstalkClient(sprintf(
-            'tcp://%s:%s',
-            $this->host, $this->port
-        ));
+        $this->cli = new BeanstalkClient(sprintf('tcp://%s:%s', $this->host, $this->port));
         if ($this->tube === 'default') {
             return new Success($this->cli);
         }
-        return call(function() {
+        return call(function () {
             yield $this->cli->use($this->tube);
             yield $this->cli->watch($this->tube);
             return $this->cli;
         });
     }
-
-
 }

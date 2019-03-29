@@ -1,18 +1,18 @@
 <?php
+
 namespace Queueing;
 
 use Amp\Promise;
 
 interface JobsQueueInterface
 {
-
     const DEFAULT_TTR = 600; // 10 mins
     const DEFAULT_PRI = 1;
 
     /**
      * Wait [timeout] for ready job to reserve
      *
-     * @param int|null $timeout
+     * @param int|null $timeout Milliseconds
      * @return array|Promise - [$jobId, $payload] (or Promise that wiil be resolved with same array)
      */
     public function reserve(int $timeout = null);
@@ -57,5 +57,4 @@ interface JobsQueueInterface
      * @return void|Promise
      */
     public function bury(int $id);
-
 }

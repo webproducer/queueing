@@ -1,4 +1,5 @@
 <?php
+
 namespace Queueing;
 
 use Amp\Failure;
@@ -6,7 +7,6 @@ use Amp\Promise;
 
 use function Amp\call;
 use Amp\Success;
-
 
 class AsyncQueueProcessor
 {
@@ -28,8 +28,7 @@ class AsyncQueueProcessor
     public function __construct(
         JobPerformerInterface $performer,
         JobFactoryInterface $jobFactory = null
-    )
-    {
+    ) {
         $this->performer = $performer;
         $this->jobFactory = $jobFactory ?: new BaseFactory();
     }
@@ -37,18 +36,17 @@ class AsyncQueueProcessor
     /**
      * @param JobsQueueInterface $queue
      * @param int $bulkSize - Max count of jobs in bulk
-     * @param int $bulkMaxWaitTime - Max bulk awaiting time (in milliseconds)
+     * @param int|null $maxWaitTime - Max bulk|job awaiting time (in milliseconds)
      * @return Promise
      */
     public function process(
         JobsQueueInterface $queue,
         int $bulkSize = 1,
-        int $bulkMaxWaitTime = 0
-    ): Promise
-    {
-        $subscriber = $this->makeSubscriber($queue, $bulkSize, $bulkMaxWaitTime);
+        int $maxWaitTime = null
+    ): Promise {
+        $subscriber = $this->makeSubscriber($queue, $bulkSize, $maxWaitTime);
         $this->subscription = $subscriber->subscribe();
-        return call(function() use ($subscriber) {
+        return call(function () use ($subscriber) {
             while (yield $this->subscription->advance()) {
                 $subscriber->sendResult(
                     yield $this->perform($this->subscription->getCurrent())
@@ -57,22 +55,22 @@ class AsyncQueueProcessor
         });
     }
 
-    public function stop() {
+    public function stop()
+    {
         $this->subscription->cancel();
     }
 
     private function makeSubscriber(
         JobsQueueInterface $queue,
         int $bulkSize,
-        int $bulkWaitTime
-    ): AbstractJobsQueueSubscriber
-    {
+        int $maxWaitTime = null
+    ): AbstractJobsQueueSubscriber {
         if ($bulkSize > 1) {
             return (new JobsQueueBulkSubscriber($queue, $this->jobFactory))
                 ->setBulkSize($bulkSize)
-                ->setBulkMaxWaitTime($bulkWaitTime);
+                ->setMaxWaitTime(intval($maxWaitTime));
         }
-        return new JobsQueueSubscriber($queue, $this->jobFactory);
+        return (new JobsQueueSubscriber($queue, $this->jobFactory))->setMaxWaitTime($maxWaitTime);
     }
 
     /**
@@ -112,7 +110,7 @@ class AsyncQueueProcessor
             $result = $this->performer->bulkPerform($bulk);
             return (!($result instanceof Promise)) ? new Success($result) : $result;
         }
-        return call(function() use ($bulk) {
+        return call(function () use ($bulk) {
             $bulkResult = new PerformingResult();
             foreach ($bulk as $job) {
                 try {
@@ -130,6 +128,4 @@ class AsyncQueueProcessor
     {
         return ($result instanceof PerformingResult) ? $result : PerformingResult::success($job);
     }
-
-
 }
