@@ -18,13 +18,14 @@
   "require": {
     "php": ">=7.1"
   },
+  "require-dev": {
+    "amphp/beanstalk": "^0.2",
+    "symfony/console": "^4.0",
+    "pda/pheanstalk": "^4.0"
+  },
   "suggest": {
     "symfony/console": "To run console queue processing command",
     "pda/pheanstalk": "To use beanstalkd as backend (sync mode)",
     "amphp/beanstalk": "To use beanstalkd as backend (async mode)"
-  },
-  "require-dev": {
-    "amphp/beanstalk": "^0.2.3",
-    "pda/pheanstalk": "^4.0"
   }
 }
