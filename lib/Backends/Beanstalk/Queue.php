@@ -122,7 +122,7 @@ class Queue implements JobsQueueInterface
 
     private function _checkConnection() {
         if (is_null($this->_client)) {
-            $this->_client = new Pheanstalk($this->_host, $this->_port);
+            $this->_client = Pheanstalk::create($this->_host, $this->_port);
             $this->_client->useTube($this->_tubeName);
             $this->_client->watch($this->_tubeName);
         }
