@@ -1,7 +1,11 @@
 <?php
 namespace Queueing;
 
-
+/**
+ * Class JobPerformerBulkWrapper
+ * @package Queueing
+ * @deprecated
+ */
 class JobPerformerBulkWrapper implements BulkJobPerformerInterface
 {
     private $performer;
