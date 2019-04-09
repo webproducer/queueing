@@ -81,7 +81,13 @@ class AsyncQueueProcessor
     {
         switch (true) {
             case $jobData instanceof JobInterface:
-                return $this->performSingle($jobData);
+                return call(function () use ($jobData) {
+                    try {
+                        return $this->wrapResult($jobData, yield $this->performSingle($jobData));
+                    } catch (PerformingException $e) {
+                        return PerformingResult::fail($e->setJob($jobData));
+                    }
+                });
             case $jobData instanceof Bulk:
                 return $this->performBulk($jobData);
             default:
@@ -89,19 +95,15 @@ class AsyncQueueProcessor
         }
     }
 
+    /**
+     * @param JobInterface $job
+     * @return Promise
+     * @throws PerformingException
+     */
     private function performSingle(JobInterface $job): Promise
     {
-        try {
-            $result = $this->performer->perform($job);
-            if (!($result instanceof Promise)) {
-                $result = new Success($result);
-            }
-            return call(function () use ($job, $result) {
-                return $this->wrapResult($job, yield $result);
-            });
-        } catch (PerformingException $e) {
-            return new Failure($e);
-        }
+        $result = $this->performer->perform($job);
+        return ($result instanceof Promise) ? $result : new Success($result);
     }
 
     private function performBulk(Bulk $bulk): Promise

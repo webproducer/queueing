@@ -13,7 +13,7 @@ class PerformingResult implements PerformingResultInterface
         return (new self)->registerDoneJob($job);
     }
 
-    public function fail(PerformingException $error): self
+    public static function fail(PerformingException $error): self
     {
         return (new self)->registerError($error);
     }
