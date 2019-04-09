@@ -91,16 +91,21 @@ class AsyncQueueProcessor
 
     private function performSingle(JobInterface $job): Promise
     {
-        try {
-            $result = $this->performer->perform($job);
+        try { // TODO: Refactoring
+            $result = $this->performer->perform($job); // Why it needs to be called outside of coroutine?
             if (!($result instanceof Promise)) {
                 $result = new Success($result);
             }
             return call(function () use ($job, $result) {
-                return $this->wrapResult($job, yield $result);
+                try {
+                    return $this->wrapResult($job, yield $result);
+                } catch (PerformingException $e) {
+                    $e->setJob($job);
+                    return (new PerformingResult)->registerError($e);
+                }
             });
         } catch (PerformingException $e) {
-            return new Failure($e);
+            return new Failure($e); // TODO: Returning type should be a PerformingResult
         }
     }
 
