@@ -66,7 +66,7 @@ class AsyncQueueProcessor
                 ->setBulkSize($bulkSize)
                 ->setMaxWaitTime(intval($maxWaitTime));
         }
-        return (new JobsQueueSubscriber($queue, $this->jobFactory))->setMaxWaitTime($maxWaitTime);
+        return (new JobsQueueSubscriber($queue, $this->jobFactory))->setMaxWaitTime(intval($maxWaitTime));
     }
 
     /**
