@@ -1,16 +1,12 @@
 <?php
-
 namespace Queueing;
 
-use Amp\Failure;
 use Amp\Promise;
-
-use function Amp\call;
 use Amp\Success;
+use function Amp\call;
 
 class AsyncQueueProcessor
 {
-
     /** @var JobPerformerInterface */
     private $performer;
 
@@ -81,7 +77,13 @@ class AsyncQueueProcessor
     {
         switch (true) {
             case $jobData instanceof JobInterface:
-                return $this->performSingle($jobData);
+                return call(function () use ($jobData) {
+                    try {
+                        return $this->wrapResult($jobData, yield $this->performSingle($jobData));
+                    } catch (PerformingException $e) {
+                        return PerformingResult::fail($e->setJob($jobData));
+                    }
+                });
             case $jobData instanceof Bulk:
                 return $this->performBulk($jobData);
             default:
@@ -89,24 +91,15 @@ class AsyncQueueProcessor
         }
     }
 
+    /**
+     * @param JobInterface $job
+     * @return Promise
+     * @throws PerformingException
+     */
     private function performSingle(JobInterface $job): Promise
     {
-        try { // TODO: Refactoring
-            $result = $this->performer->perform($job); // Why it needs to be called outside of coroutine?
-            if (!($result instanceof Promise)) {
-                $result = new Success($result);
-            }
-            return call(function () use ($job, $result) {
-                try {
-                    return $this->wrapResult($job, yield $result);
-                } catch (PerformingException $e) {
-                    $e->setJob($job);
-                    return (new PerformingResult)->registerError($e);
-                }
-            });
-        } catch (PerformingException $e) {
-            return new Failure($e); // TODO: Returning type should be a PerformingResult
-        }
+        $result = $this->performer->perform($job);
+        return ($result instanceof Promise) ? $result : new Success($result);
     }
 
     private function performBulk(Bulk $bulk): Promise
