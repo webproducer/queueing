@@ -13,6 +13,8 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     /** @var Emitter */
     private $emitter;
     private $results = [];
+    /** @var Emitter */
+    private $resultsEmitter;
     /** @var JobFactoryInterface */
     private $jobFactory;
     /** @var int|null JobInterface|Bulk wait timeout in milliseconds */
@@ -27,6 +29,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     {
         $this->queue = $queue;
         $this->jobFactory = $jobFactory ?: new BaseFactory();
+        $this->resultsEmitter = new Emitter();
     }
 
     /**
@@ -48,6 +51,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     public function sendResult(PerformingResult $result): Promise
     {
         $this->results[] = [$def = new Deferred(), $result];
+        $this->resultsEmitter->emit(true);
         return $def->promise();
     }
 
@@ -107,6 +111,10 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     {
         return call(function () use ($value) {
             yield $this->emitter->emit($value);
+            while (yield $this->resultsEmitter->iterate()->advance()) {
+                $this->resultsEmitter->iterate()->getCurrent();
+                break;
+            }
             yield $this->processResults();
         });
     }
