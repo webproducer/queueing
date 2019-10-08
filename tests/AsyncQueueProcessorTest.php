@@ -1,6 +1,7 @@
 <?php
 namespace Queueing\Tests;
 
+use Amp\Deferred;
 use Amp\Delayed;
 use Amp\Loop;
 use Amp\Success;
@@ -60,13 +61,10 @@ class AsyncQueueProcessorTest extends TestCase
             ->willReturnCallback($performerCallback);
         $processor = new AsyncQueueProcessor($performer);
         Loop::run(function () use ($processor, $jobsQueue, $bulkSize, $loopTimeout) {
-            yield all([
-                $processor->process($jobsQueue, $bulkSize),
-                call(function () use ($processor, $loopTimeout) {
-                    yield new Delayed($loopTimeout);
-                    $processor->stop();
-                })
-            ]);
+            (new Delayed($loopTimeout))->onResolve(function () use ($processor) {
+                $processor->stop();
+            });
+            yield $processor->process($jobsQueue, $bulkSize);
         });
     }
 
@@ -82,13 +80,19 @@ class AsyncQueueProcessorTest extends TestCase
                 ],
                 'buriedJobsIds' => [],
                 'performerCallback' => function (JobInterface $job) {
-                    return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 10));
-                        return "Job#{$job->getId()}";
+                    $def = new Deferred();
+                    return call(function (JobInterface $job) use ($def) {
+                        return all([
+                            $def->promise(),
+                            call(function () use ($def) {
+                                yield new Delayed(400);
+                                $def->resolve();
+                            })
+                        ]);
                     }, $job);
                 },
                 'bulkSize' => 1,
-                'loopTimeout' => 50,
+                'loopTimeout' => 200,
             ],
             '1 job buried (bulk:1)' => [
                 'jobsIds' => [
@@ -267,6 +271,48 @@ class AsyncQueueProcessorTest extends TestCase
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
                 'deletedJobsIds' => [1, 3, 5, 7, 9],
                 'buriedJobsIds' => [2, 4, 6, 8, 10],
+                'performerCallback' => function (JobInterface $job) {
+                    return call(function (JobInterface $job) {
+                        yield new Delayed(rand(1, 5));
+                        if (($job->getId() % 2) === 0) {
+                            throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
+                        }
+                        return "Job#{$job->getId()}";
+                    }, $job);
+                },
+                'bulkSize' => 5,
+                'loopTimeout' => 100,
+            ],
+            '12 jobs deleted (bulk:5)' => [
+                'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                'deletedJobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                'buriedJobsIds' => [],
+                'performerCallback' => function (JobInterface $job) {
+                    return call(function (JobInterface $job) {
+                        yield new Delayed(rand(1, 5));
+                        return "Job#{$job->getId()}";
+                    }, $job);
+                },
+                'bulkSize' => 5,
+                'loopTimeout' => 100,
+            ],
+            '12 jobs buried (bulk:5)' => [
+                'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                'deletedJobsIds' => [],
+                'buriedJobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                'performerCallback' => function (JobInterface $job) {
+                    return call(function (JobInterface $job) {
+                        yield new Delayed(rand(1, 5));
+                        throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
+                    }, $job);
+                },
+                'bulkSize' => 5,
+                'loopTimeout' => 100,
+            ],
+            '12 jobs mixed (bulk:5)' => [
+                'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                'deletedJobsIds' => [1, 3, 5, 7, 9, 11],
+                'buriedJobsIds' => [2, 4, 6, 8, 10, 12],
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
                         yield new Delayed(rand(1, 5));

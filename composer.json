@@ -27,7 +27,8 @@
     "amphp/beanstalk": "^0.2",
     "symfony/console": "^4.0",
     "pda/pheanstalk": "^4.0",
-    "phpunit/phpunit": "^8.4"
+    "phpunit/phpunit": "^8.4",
+    "amphp/artax": "^3.0"
   },
   "suggest": {
     "symfony/console": "To run console queue processing command",

@@ -13,12 +13,11 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     /** @var Emitter */
     private $emitter;
     private $results = [];
-    /** @var Emitter */
-    private $resultsEmitter;
     /** @var JobFactoryInterface */
     private $jobFactory;
     /** @var int|null JobInterface|Bulk wait timeout in milliseconds */
     protected $waitTime = null;
+    private $waitResults;
 
     /**
      * AbstractJobsQueueSubscriber constructor.
@@ -29,7 +28,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     {
         $this->queue = $queue;
         $this->jobFactory = $jobFactory ?: new BaseFactory();
-        $this->resultsEmitter = new Emitter();
+        $this->waitResults = new WaitGroup();
     }
 
     /**
@@ -51,7 +50,11 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     public function sendResult(PerformingResult $result): Promise
     {
         $this->results[] = [$def = new Deferred(), $result];
-        $this->resultsEmitter->emit(true);
+//        $resultDef = array_shift($this->performingResultsPromises);
+//        if ($resultDef) {
+//            $resultDef->resolve();
+//        }
+        $this->waitResults->done();
         return $def->promise();
     }
 
@@ -107,24 +110,25 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
         return $this->jobFactory->makeJob($id, $payload);
     }
 
-    protected function emitAndProcess($value): Promise
+    protected function emit($value): Promise
     {
         return call(function () use ($value) {
+            $this->waitResults->inc();
             yield $this->emitter->emit($value);
-            while (yield $this->resultsEmitter->iterate()->advance()) {
-                $this->resultsEmitter->iterate()->getCurrent();
-                break;
-            }
+        });
+    }
+
+    protected function complete(): Promise
+    {
+        return call(function () {
+            $this->emitter->complete();
+            $this->waitResults->lock();
+            yield $this->waitResults;
             yield $this->processResults();
         });
     }
 
-    protected function complete()
-    {
-        $this->emitter->complete();
-    }
-
-    private function processResults(): Promise
+    protected function processResults(): Promise
     {
         return call(function () {
             /**
