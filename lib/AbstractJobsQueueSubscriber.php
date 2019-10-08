@@ -17,6 +17,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     private $jobFactory;
     /** @var int|null JobInterface|Bulk wait timeout in milliseconds */
     protected $waitTime = null;
+    private $waitResults;
 
     /**
      * AbstractJobsQueueSubscriber constructor.
@@ -27,6 +28,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     {
         $this->queue = $queue;
         $this->jobFactory = $jobFactory ?: new BaseFactory();
+        $this->waitResults = new WaitGroup();
     }
 
     /**
@@ -48,6 +50,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     public function sendResult(PerformingResult $result): Promise
     {
         $this->results[] = [$def = new Deferred(), $result];
+        $this->waitResults->done();
         return $def->promise();
     }
 
@@ -103,20 +106,25 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
         return $this->jobFactory->makeJob($id, $payload);
     }
 
-    protected function emitAndProcess($value): Promise
+    protected function emit($value): Promise
     {
         return call(function () use ($value) {
+            $this->waitResults->inc();
             yield $this->emitter->emit($value);
+        });
+    }
+
+    protected function complete(): Promise
+    {
+        return call(function () {
+            $this->emitter->complete();
+            $this->waitResults->lock();
+            yield $this->waitResults;
             yield $this->processResults();
         });
     }
 
-    protected function complete()
-    {
-        $this->emitter->complete();
-    }
-
-    private function processResults(): Promise
+    protected function processResults(): Promise
     {
         return call(function () {
             /**

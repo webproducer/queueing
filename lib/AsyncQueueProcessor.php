@@ -1,16 +1,12 @@
 <?php
-
 namespace Queueing;
 
-use Amp\Failure;
 use Amp\Promise;
-
-use function Amp\call;
 use Amp\Success;
+use function Amp\call;
 
 class AsyncQueueProcessor
 {
-
     /** @var JobPerformerInterface */
     private $performer;
 
@@ -70,7 +66,7 @@ class AsyncQueueProcessor
                 ->setBulkSize($bulkSize)
                 ->setMaxWaitTime(intval($maxWaitTime));
         }
-        return (new JobsQueueSubscriber($queue, $this->jobFactory))->setMaxWaitTime($maxWaitTime);
+        return (new JobsQueueSubscriber($queue, $this->jobFactory))->setMaxWaitTime(intval($maxWaitTime));
     }
 
     /**

@@ -1,11 +1,9 @@
 <?php
 namespace Queueing;
 
-
 class PerformingResult implements PerformingResultInterface
 {
-
-    private $errros = [];
+    private $errors = [];
     private $completed = [];
 
     public static function success(JobInterface $job): self
@@ -26,7 +24,7 @@ class PerformingResult implements PerformingResultInterface
 
     public function registerError(PerformingException $error): self
     {
-        $this->errros[] = $error;
+        $this->errors[] = $error;
         return $this;
     }
 
@@ -43,8 +41,6 @@ class PerformingResult implements PerformingResultInterface
      */
     public function getErrors(): array
     {
-        return $this->errros;
+        return $this->errors;
     }
-
-
 }

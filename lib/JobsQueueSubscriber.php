@@ -14,10 +14,11 @@ class JobsQueueSubscriber extends AbstractJobsQueueSubscriber
         asyncCall(function () {
             while ($jobData = yield $this->nextJob($this->waitTime)) {
                 if ($jobData !== self::TIMED_OUT) {
-                    yield $this->emitAndProcess($this->makeJob($jobData));
+                    yield $this->emit($this->makeJob($jobData));
                 }
+                yield $this->processResults();
             }
-            $this->complete();
+            yield $this->complete();
         });
         return $this->makeSubscription();
     }

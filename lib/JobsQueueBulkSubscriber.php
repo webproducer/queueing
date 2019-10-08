@@ -40,15 +40,16 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
                     ++$jobsCount;
                 }
                 if ($jobsCount && (($jobsCount === $this->portion) || $isTimedOut)) {
-                    yield $this->emitAndProcess($this->makeList($jobs));
+                    yield $this->emit($this->makeList($jobs));
                     $jobs = [];
                     $jobsCount = 0;
                 }
+                yield $this->processResults();
             }
             if (!empty($jobs)) {
-                yield $this->emitAndProcess($this->makeList($jobs));
+                yield $this->emit($this->makeList($jobs));
             }
-            $this->complete();
+            yield $this->complete();
         });
         return $this->makeSubscription();
     }
