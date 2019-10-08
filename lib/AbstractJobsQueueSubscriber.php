@@ -50,10 +50,6 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     public function sendResult(PerformingResult $result): Promise
     {
         $this->results[] = [$def = new Deferred(), $result];
-//        $resultDef = array_shift($this->performingResultsPromises);
-//        if ($resultDef) {
-//            $resultDef->resolve();
-//        }
         $this->waitResults->done();
         return $def->promise();
     }
