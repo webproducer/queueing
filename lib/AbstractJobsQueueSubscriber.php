@@ -2,7 +2,10 @@
 
 namespace Queueing;
 
-use Amp\{Promise, Emitter, Delayed, Deferred};
+use Amp\Promise;
+use Amp\Emitter;
+use Amp\Delayed;
+use Amp\Deferred;
 use function Amp\call;
 
 abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
@@ -47,6 +50,10 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
         return $this->jobFactory;
     }
 
+    /**
+     * @param PerformingResult $result
+     * @return Promise
+     */
     public function sendResult(PerformingResult $result): Promise
     {
         $this->results[] = [$def = new Deferred(), $result];
@@ -99,6 +106,11 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
         });
     }
 
+    /**
+     * @param array $jobData
+     * @return JobInterface
+     * @throws JobCreatingException
+     */
     protected function makeJob(array $jobData): JobInterface
     {
         [$id, $payload] = $jobData;
