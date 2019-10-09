@@ -13,6 +13,7 @@ class WaitGroup implements Promise
     /**
      * WaitGroup constructor.
      * @param int $remain
+     * @param bool $isLocked
      */
     public function __construct(int $remain = 0, bool $isLocked = false)
     {
@@ -21,6 +22,9 @@ class WaitGroup implements Promise
         $this->isLocked = $isLocked;
     }
 
+    /**
+     * @param int $cnt
+     */
     public function done(int $cnt = 1)
     {
         $this->remain -= $cnt;
@@ -29,10 +33,14 @@ class WaitGroup implements Promise
         }
     }
 
+    /**
+     * @param int $cnt
+     * @throws Exception
+     */
     public function inc(int $cnt = 1)
     {
         if ($this->isLocked) {
-            throw new \Exception("Locked");
+            throw new Exception('WaitGroup is locked');
         }
         $this->remain += $cnt;
     }
