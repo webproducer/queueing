@@ -12,7 +12,6 @@ use Queueing\JobPerformerInterface;
 use Queueing\JobsQueueInterface;
 use Queueing\PerformingException;
 use function Amp\call;
-use function Amp\Promise\all;
 
 class AsyncQueueProcessorTest extends TestCase
 {
@@ -39,11 +38,11 @@ class AsyncQueueProcessorTest extends TestCase
         $jobsQueue = $this->createMock(JobsQueueInterface::class);
         $jobsQueue->expects($this->atLeast(count($jobsIds)))
             ->method('reserve')
-            ->willReturnCallback(function () use (&$jobsIds) {
-                return call(function () use (&$jobsIds) {
+            ->willReturnCallback(function (int $timeout) use (&$jobsIds) {
+                return call(function () use (&$jobsIds, $timeout) {
                     yield new Delayed(rand(1, 5));
                     $jobId = array_shift($jobsIds);
-                    return is_null($jobId) ? null : [$jobId, ''];
+                    return is_null($jobId) ? yield new Delayed($timeout, null) : [$jobId, ''];
                 });
             });
         $jobsQueue->expects($this->exactly(count($deletedJobsIds)))
@@ -64,7 +63,7 @@ class AsyncQueueProcessorTest extends TestCase
             (new Delayed($loopTimeout))->onResolve(function () use ($processor) {
                 $processor->stop();
             });
-            yield $processor->process($jobsQueue, $bulkSize);
+            yield $processor->process($jobsQueue, $bulkSize, 10);
         });
     }
 
@@ -79,17 +78,14 @@ class AsyncQueueProcessorTest extends TestCase
                     1,
                 ],
                 'buriedJobsIds' => [],
-                'performerCallback' => function (JobInterface $job) {
-                    $def = new Deferred();
-                    return call(function (JobInterface $job) use ($def) {
-                        return all([
-                            $def->promise(),
-                            call(function () use ($def) {
-                                yield new Delayed(400);
-                                $def->resolve();
-                            })
-                        ]);
-                    }, $job);
+                'performerCallback' => function () {
+                    return call(function () {
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def) {
+                            $def->resolve();
+                        });
+                        return $def->promise();
+                    });
                 },
                 'bulkSize' => 1,
                 'loopTimeout' => 200,
@@ -101,14 +97,17 @@ class AsyncQueueProcessorTest extends TestCase
                 'deletedJobsIds' => [
                 ],
                 'buriedJobsIds' => [1],
-                'performerCallback' => function (JobInterface $job) {
-                    return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 10));
-                        throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
-                    }, $job);
+                'performerCallback' => function () {
+                    return call(function () {
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def) {
+                            $def->fail(new PerformingException());
+                        });
+                        return $def->promise();
+                    });
                 },
                 'bulkSize' => 1,
-                'loopTimeout' => 50,
+                'loopTimeout' => 200,
             ],
             '2 jobs deleted (bulk:1)' => [
                 'jobsIds' => [
@@ -118,70 +117,86 @@ class AsyncQueueProcessorTest extends TestCase
                     1, 2,
                 ],
                 'buriedJobsIds' => [],
-                'performerCallback' => function (JobInterface $job) {
-                    return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 10));
-                        return "Job#{$job->getId()}";
-                    }, $job);
+                'performerCallback' => function () {
+                    return call(function () {
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def) {
+                            $def->resolve();
+                        });
+                        return $def->promise();
+                    });
                 },
                 'bulkSize' => 1,
-                'loopTimeout' => 50,
+                'loopTimeout' => 200,
             ],
             '2 jobs buried (bulk:1)' => [
                 'jobsIds' => [1, 2],
                 'deletedJobsIds' => [
                 ],
                 'buriedJobsIds' => [1, 2],
-                'performerCallback' => function (JobInterface $job) {
-                    return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 10));
-                        throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
-                    }, $job);
+                'performerCallback' => function () {
+                    return call(function () {
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def) {
+                            $def->fail(new PerformingException());
+                        });
+                        return $def->promise();
+                    });
                 },
                 'bulkSize' => 1,
-                'loopTimeout' => 50,
+                'loopTimeout' => 200,
             ],
             '2 jobs mixed (bulk:1)' => [
                 'jobsIds' => [1, 2],
                 'deletedJobsIds' => [1],
                 'buriedJobsIds' => [2],
                 'performerCallback' => function (JobInterface $job) {
-                    return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 10));
-                        if ($job->getId() === 1) {
-                            return '';
-                        }
-                        throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
-                    }, $job);
+                    return call(function () use ($job) {
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                            if ($job->getId() === 1) {
+                                $def->resolve();
+                            } else {
+                                $def->fail(new PerformingException());
+                            }
+                        });
+                        return $def->promise();
+                    });
                 },
                 'bulkSize' => 1,
-                'loopTimeout' => 50,
+                'loopTimeout' => 200,
             ],
             '20 jobs deleted (bulk:1)' => [
-                'jobsIds' => range(1, 20),
-                'deletedJobsIds' => range(1, 20),
+                'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+                'deletedJobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
                 'buriedJobsIds' => [],
-                'performerCallback' => function (JobInterface $job) {
-                    return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        return "Job#{$job->getId()}";
-                    }, $job);
+                'performerCallback' => function () {
+                    return call(function () {
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def) {
+                            $def->resolve();
+                        });
+                        return $def->promise();
+                    });
                 },
                 'bulkSize' => 1,
-                'loopTimeout' => 200,
+                'loopTimeout' => 7500,
             ],
             '20 jobs buried (bulk:1)' => [
-                'jobsIds' => range(1, 20),
+                'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
                 'deletedJobsIds' => [],
-                'buriedJobsIds' => range(1, 20),
+                'buriedJobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                            $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
+                        });
+                        return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 1,
-                'loopTimeout' => 200,
+                'loopTimeout' => 7500,
             ],
             '20 jobs mixed (bulk:1)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
@@ -189,28 +204,35 @@ class AsyncQueueProcessorTest extends TestCase
                 'buriedJobsIds' => [10, 20],
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        if (($job->getId() % 10) === 0) {
-                            throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
-                        }
-                        return "Job#{$job->getId()}";
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                            if (($job->getId() % 10) === 0) {
+                                $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
+                            } else {
+                                $def->resolve();
+                            }
+                        });
+                        return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 1,
-                'loopTimeout' => 200,
+                'loopTimeout' => 7500,
             ],
             '5 jobs deleted (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5],
                 'deletedJobsIds' => [1, 2, 3, 4, 5],
                 'buriedJobsIds' => [],
-                'performerCallback' => function (JobInterface $job) {
-                    return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        return "Job#{$job->getId()}";
-                    }, $job);
+                'performerCallback' => function () {
+                    return call(function () {
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def) {
+                            $def->resolve();
+                        });
+                        return $def->promise();
+                    });
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 100,
+                'loopTimeout' => 200,
             ],
             '5 jobs buried (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5],
@@ -218,12 +240,15 @@ class AsyncQueueProcessorTest extends TestCase
                 'buriedJobsIds' => [1, 2, 3, 4, 5],
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                            $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
+                        });
+                        return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 100,
+                'loopTimeout' => 200,
             ],
             '5 jobs mixed (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5],
@@ -231,28 +256,35 @@ class AsyncQueueProcessorTest extends TestCase
                 'buriedJobsIds' => [2, 4],
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        if (($job->getId() % 2) === 0) {
-                            throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
-                        }
-                        return "Job#{$job->getId()}";
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                            if (($job->getId() % 2) === 0) {
+                                $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
+                            } else {
+                                $def->resolve();
+                            }
+                        });
+                        return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 100,
+                'loopTimeout' => 200,
             ],
             '10 jobs deleted (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
                 'deletedJobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
                 'buriedJobsIds' => [],
-                'performerCallback' => function (JobInterface $job) {
-                    return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        return "Job#{$job->getId()}";
-                    }, $job);
+                'performerCallback' => function () {
+                    return call(function () {
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def) {
+                            $def->resolve();
+                        });
+                        return $def->promise();
+                    });
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 100,
+                'loopTimeout' => 200,
             ],
             '10 jobs buried (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
@@ -260,12 +292,15 @@ class AsyncQueueProcessorTest extends TestCase
                 'buriedJobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                            $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
+                        });
+                        return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 100,
+                'loopTimeout' => 200,
             ],
             '10 jobs mixed (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
@@ -273,28 +308,35 @@ class AsyncQueueProcessorTest extends TestCase
                 'buriedJobsIds' => [2, 4, 6, 8, 10],
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        if (($job->getId() % 2) === 0) {
-                            throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
-                        }
-                        return "Job#{$job->getId()}";
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                            if (($job->getId() % 2) === 0) {
+                                $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
+                            } else {
+                                $def->resolve();
+                            }
+                        });
+                        return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 100,
+                'loopTimeout' => 200,
             ],
             '12 jobs deleted (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
                 'deletedJobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
                 'buriedJobsIds' => [],
-                'performerCallback' => function (JobInterface $job) {
-                    return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        return "Job#{$job->getId()}";
-                    }, $job);
+                'performerCallback' => function () {
+                    return call(function () {
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def) {
+                            $def->resolve();
+                        });
+                        return $def->promise();
+                    });
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 100,
+                'loopTimeout' => 3000,
             ],
             '12 jobs buried (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
@@ -302,12 +344,15 @@ class AsyncQueueProcessorTest extends TestCase
                 'buriedJobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                            $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
+                        });
+                        return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 100,
+                'loopTimeout' => 3000,
             ],
             '12 jobs mixed (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
@@ -315,15 +360,19 @@ class AsyncQueueProcessorTest extends TestCase
                 'buriedJobsIds' => [2, 4, 6, 8, 10, 12],
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
-                        yield new Delayed(rand(1, 5));
-                        if (($job->getId() % 2) === 0) {
-                            throw (new PerformingException("Job#{$job->getId()}"))->setJob($job);
-                        }
-                        return "Job#{$job->getId()}";
+                        $def = new Deferred();
+                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                            if (($job->getId() % 2) === 0) {
+                                $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
+                            } else {
+                                $def->resolve();
+                            }
+                        });
+                        return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 100,
+                'loopTimeout' => 3000,
             ],
         ];
     }
