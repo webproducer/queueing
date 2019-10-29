@@ -133,6 +133,9 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
             $this->waitResults->lock();
             yield $this->waitResults;
             yield $this->processResults();
+            if ($this->queue instanceof ClosableInterface) {
+                $this->queue->close();
+            }
         });
     }
 
