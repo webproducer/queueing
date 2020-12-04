@@ -3,10 +3,12 @@
 namespace Queueing\Backends\Beanstalk;
 
 use Amp\Beanstalk\BeanstalkClient;
+use Amp\Beanstalk\BeanstalkException;
 use Amp\Beanstalk\TimedOutException;
 use Amp\Promise;
 use Amp\Success;
 use Queueing\ClosableInterface;
+use Queueing\JobsQueueException;
 use Queueing\JobsQueueInterface;
 use function Amp\call;
 
@@ -39,6 +41,8 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
                 return yield $cli->reserve($this->millisecondsToSeconds($timeout));
             } catch (TimedOutException $e) {
                 return null;
+            } catch (BeanstalkException $e) {
+                throw new JobsQueueException($e->getMessage(), (int)$e->getCode(), $e);
             }
         });
     }

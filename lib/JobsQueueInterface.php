@@ -14,6 +14,7 @@ interface JobsQueueInterface
      *
      * @param int|null $timeout Milliseconds
      * @return array|Promise - [$jobId, $payload] (or Promise that wiil be resolved with same array)
+     * @throws JobsQueueException
      */
     public function reserve(int $timeout = null);
 

@@ -6,6 +6,8 @@ use Amp\Promise;
 use Amp\Emitter;
 use Amp\Delayed;
 use Amp\Deferred;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use function Amp\call;
 
 abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
@@ -21,17 +23,24 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     /** @var int|null JobInterface|Bulk wait timeout in milliseconds */
     protected $waitTime = null;
     private $waitResults;
+    /** @var LoggerInterface */
+    protected $logger;
 
     /**
      * AbstractJobsQueueSubscriber constructor.
      * @param JobsQueueInterface $queue
      * @param JobFactoryInterface|null $jobFactory
+     * @param LoggerInterface|null $logger
      */
-    public function __construct(JobsQueueInterface $queue, JobFactoryInterface $jobFactory = null)
-    {
+    public function __construct(
+        JobsQueueInterface $queue,
+        JobFactoryInterface $jobFactory = null,
+        LoggerInterface $logger = null
+    ) {
         $this->queue = $queue;
         $this->jobFactory = $jobFactory ?: new BaseFactory();
         $this->waitResults = new WaitGroup();
+        $this->logger = $logger ?? new NullLogger();
     }
 
     /**
@@ -100,7 +109,13 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
                 yield new Delayed(($delay === $maxDelay) ? $maxDelay : $delay++);
             }
             if ($result instanceof \Throwable) {
-                throw $result;
+                if ($result instanceof JobsQueueException) {
+                    $this->logger->warning($result->getMessage());
+                    $this->logger->debug($result->getTraceAsString(), ['exception' => $result]);
+                    $result = self::TIMED_OUT;
+                } else {
+                    throw $result;
+                }
             }
             return $result;
         });

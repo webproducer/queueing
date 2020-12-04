@@ -3,6 +3,8 @@ namespace Queueing;
 
 use Amp\Promise;
 use Amp\Success;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use function Amp\call;
 
 class AsyncQueueProcessor
@@ -15,18 +17,23 @@ class AsyncQueueProcessor
 
     /** @var Subscription */
     private $subscription;
+    /** @var LoggerInterface|NullLogger */
+    private $logger;
 
     /**
      * AsyncQueueProcessor constructor.
      * @param JobPerformerInterface $performer
      * @param JobFactoryInterface|null $jobFactory
+     * @param LoggerInterface|null $logger
      */
     public function __construct(
         JobPerformerInterface $performer,
-        JobFactoryInterface $jobFactory = null
+        JobFactoryInterface $jobFactory = null,
+        LoggerInterface $logger = null
     ) {
         $this->performer = $performer;
         $this->jobFactory = $jobFactory ?: new BaseFactory();
+        $this->logger = $logger ?? new NullLogger();
     }
 
     /**
@@ -62,11 +69,12 @@ class AsyncQueueProcessor
         int $maxWaitTime = null
     ): AbstractJobsQueueSubscriber {
         if ($bulkSize > 1) {
-            return (new JobsQueueBulkSubscriber($queue, $this->jobFactory))
+            return (new JobsQueueBulkSubscriber($queue, $this->jobFactory, $this->logger))
                 ->setBulkSize($bulkSize)
                 ->setMaxWaitTime(intval($maxWaitTime));
         }
-        return (new JobsQueueSubscriber($queue, $this->jobFactory))->setMaxWaitTime(intval($maxWaitTime));
+        return (new JobsQueueSubscriber($queue, $this->jobFactory, $this->logger))
+            ->setMaxWaitTime(intval($maxWaitTime));
     }
 
     /**
