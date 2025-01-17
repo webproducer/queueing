@@ -119,6 +119,10 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
         return call(function () {
             yield $this->cli->use($this->tube);
             yield $this->cli->watch($this->tube);
+            $ignoreTubes = array_diff(yield $this->cli->listWatchedTubes(), [$this->tube]);
+            foreach ($ignoreTubes as $ignoreTube) {
+                yield $this->cli->ignore($ignoreTube);
+            }
             return $this->cli;
         });
     }

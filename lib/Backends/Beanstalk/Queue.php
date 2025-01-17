@@ -134,7 +134,7 @@ class Queue implements JobsQueueInterface
         if (is_null($this->client)) {
             $this->client = Pheanstalk::create($this->host, $this->port);
             $this->client->useTube($this->tubeName);
-            $this->client->watch($this->tubeName);
+            $this->client->watchOnly($this->tubeName);
         }
     }
 }
