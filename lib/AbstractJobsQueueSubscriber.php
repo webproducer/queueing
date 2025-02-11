@@ -25,6 +25,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     private $waitResults;
     /** @var LoggerInterface */
     protected $logger;
+    private $processingJobs = [];
 
     /**
      * AbstractJobsQueueSubscriber constructor.
@@ -110,12 +111,18 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
             }
             if ($result instanceof \Throwable) {
                 if ($result instanceof JobsQueueException) {
-                    $this->logger->warning($result->getMessage());
-                    $this->logger->debug($result->getTraceAsString(), ['exception' => $result]);
+                    $context = ['processing_jobs' => $this->processingJobs, 'exception' => $result];
+                    $this->logger->warning($result->getMessage(), $context);
+                    $context['trace'] = $result->getTrace();
+                    $this->logger->debug($result->getMessage(), $context);
                     $result = self::TIMED_OUT;
                 } else {
                     throw $result;
                 }
+            }
+            if (is_array($result)) {
+                $jobId = $result[0];
+                $this->processingJobs[$jobId] = microtime(true);
             }
             return $result;
         });
@@ -175,15 +182,18 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
             /** @var JobInterface $job */
             foreach ($result->getDoneJobs() as $job) {
                 yield $this->queue->delete($job->getId());
+                unset($this->processingJobs[$job->getId()]);
             }
             /** @var PerformingException $error */
             foreach ($result->getErrors() as $error) {
                 $id = $error->getJob()->getId();
                 if ($error->needsToBeRepeated()) {
                     yield $this->queue->release($id, $error->getRepeatDelay());
+                    unset($this->processingJobs[$job->getId()]);
                     continue;
                 }
                 yield $this->queue->bury($id);
+                unset($this->processingJobs[$job->getId()]);
             }
         });
     }
