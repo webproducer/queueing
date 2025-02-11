@@ -111,9 +111,9 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
             }
             if ($result instanceof \Throwable) {
                 if ($result instanceof JobsQueueException) {
-                    $context = ['processing_jobs' => $this->processingJobs, 'exception' => $result];
+                    $context = ['processing_jobs' => $this->processingJobs];
                     $this->logger->warning($result->getMessage(), $context);
-                    $context['trace'] = $result->getTrace();
+                    $context['exception'] = $result;
                     $this->logger->debug($result->getMessage(), $context);
                     $result = self::TIMED_OUT;
                 } else {
