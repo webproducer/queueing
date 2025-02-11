@@ -117,7 +117,7 @@ class Queue implements JobsQueueInterface
     public function delete(int $id)
     {
         $this->checkConnection();
-        $this->client->delete(new Job($id, null));
+        $this->client->delete(new Job($id, ''));
     }
 
     /**
@@ -126,7 +126,7 @@ class Queue implements JobsQueueInterface
     public function bury(int $id)
     {
         $this->checkConnection();
-        $this->client->bury(new Job($id, null));
+        $this->client->bury(new Job($id, ''));
     }
 
     private function checkConnection()
