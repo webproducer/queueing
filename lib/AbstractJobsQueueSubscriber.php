@@ -181,19 +181,20 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
         return call(function () use ($result) {
             /** @var JobInterface $job */
             foreach ($result->getDoneJobs() as $job) {
-                yield $this->queue->delete($job->getId());
-                unset($this->processingJobs[$job->getId()]);
+                $id = $job->getId();
+                yield $this->queue->delete($id);
+                unset($this->processingJobs[$id]);
             }
             /** @var PerformingException $error */
             foreach ($result->getErrors() as $error) {
                 $id = $error->getJob()->getId();
                 if ($error->needsToBeRepeated()) {
                     yield $this->queue->release($id, $error->getRepeatDelay());
-                    unset($this->processingJobs[$job->getId()]);
+                    unset($this->processingJobs[$id]);
                     continue;
                 }
                 yield $this->queue->bury($id);
-                unset($this->processingJobs[$job->getId()]);
+                unset($this->processingJobs[$id]);
             }
         });
     }
