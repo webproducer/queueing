@@ -123,6 +123,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
             if (is_array($result)) {
                 $jobId = $result[0];
                 $this->processingJobs[$jobId] = microtime(true);
+                $this->logger->debug('Job reserved', ['job_id' => $jobId]);
             }
             return $result;
         });
@@ -184,6 +185,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
                 $id = $job->getId();
                 yield $this->queue->delete($id);
                 unset($this->processingJobs[$id]);
+                $this->logger->debug('Job deleted', ['job_id' => $id]);
             }
             /** @var PerformingException $error */
             foreach ($result->getErrors() as $error) {
@@ -191,10 +193,12 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
                 if ($error->needsToBeRepeated()) {
                     yield $this->queue->release($id, $error->getRepeatDelay());
                     unset($this->processingJobs[$id]);
+                    $this->logger->debug('Job released', ['job_id' => $id]);
                     continue;
                 }
                 yield $this->queue->bury($id);
                 unset($this->processingJobs[$id]);
+                $this->logger->debug('Job buried', ['job_id' => $id]);
             }
         });
     }
