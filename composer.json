@@ -17,9 +17,7 @@
   },
   "require": {
     "php": ">=7.1",
-    "psr/log": "^1.1",
-    "ext-json": "*",
-    "amphp/sync": "^1.4"
+    "psr/log": "^1.1"
   },
   "autoload-dev": {
     "psr-4": {
@@ -32,12 +30,12 @@
     "symfony/console": "^4.0",
     "pda/pheanstalk": "^4.0",
     "phpunit/phpunit": "^8.4",
-    "ext-pcntl": "*"
+    "ext-pcntl": "*",
+    "ext-json": "*"
   },
   "suggest": {
     "symfony/console": "To run console queue processing command",
     "pda/pheanstalk": "To use beanstalkd as backend (sync mode)",
-    "amphp/beanstalk": "To use beanstalkd as backend (async mode)",
-    "amphp/sync": "To use beanstalkd as backend (async mode)"
+    "amphp/beanstalk": "To use beanstalkd as backend (async mode)"
   }
 }
