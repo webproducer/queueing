@@ -51,7 +51,7 @@ class AsyncQueueProcessor
         $this->subscription = $subscriber->subscribe();
         return call(function () use ($subscriber) {
             while (yield $this->subscription->advance()) {
-                $subscriber->sendResult(
+                yield $subscriber->sendResult(
                     yield $this->perform($this->subscription->getCurrent())
                 );
             }
@@ -69,7 +69,7 @@ class AsyncQueueProcessor
         int $maxWaitTime = null
     ): AbstractJobsQueueSubscriber {
         if ($bulkSize > 1) {
-            return (new JobsQueueBulkSubscriber($queue, $this->jobFactory, $this->logger))
+            return (new JobsQueueBulkSubscriber($queue, $this->jobFactory, $this->logger, $bulkSize))
                 ->setBulkSize($bulkSize)
                 ->setMaxWaitTime(intval($maxWaitTime));
         }
@@ -116,16 +116,23 @@ class AsyncQueueProcessor
             $result = $this->performer->bulkPerform($bulk);
             return (!($result instanceof Promise)) ? new Success($result) : $result;
         }
+
         return call(function () use ($bulk) {
             $bulkResult = new PerformingResult();
-            foreach ($bulk as $job) {
-                try {
-                    yield $this->performSingle($job);
-                    $bulkResult->registerDoneJob($job);
-                } catch (PerformingException $e) {
-                    $bulkResult->registerError($e);
-                }
-            }
+
+            $promises = array_map(function (JobInterface $job) use (&$bulkResult): Promise {
+                return call(function (JobInterface $job) use (&$bulkResult) {
+                    try {
+                        yield $this->performSingle($job);
+                        $bulkResult->registerDoneJob($job);
+                    } catch (PerformingException $e) {
+                        $bulkResult->registerError($e);
+                    }
+                }, $job);
+            }, $bulk->getJobs());
+
+            yield Promise\all($promises);
+
             return $bulkResult;
         });
     }

@@ -32,19 +32,22 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
     {
         asyncCall(function () {
             $jobs = [];
-            $jobsCount = 0;
-            while ($jobData = yield $this->nextJob($this->waitTime)) {
-                $isTimedOut = $jobData === self::TIMED_OUT;
-                if (!$isTimedOut) {
-                    $jobs[] = $jobData;
-                    ++$jobsCount;
-                }
-                if ($jobsCount && (($jobsCount === $this->portion) || $isTimedOut)) {
+            while (!$this->isStopped()) {
+                // Fill in the $jobs while a job exists and amount of jobs less than the portion.
+                do {
+                    $jobData = yield $this->nextJob($this->waitTime);
+                    if (is_array($jobData)) {
+                        $jobs[] = $jobData;
+                    }
+                } while (is_array($jobData) && count($jobs) < $this->portion);
+
+
+                if (count($jobs)) {
                     yield $this->emit($this->makeList($jobs));
+                    yield $this->processResults();
                     $jobs = [];
-                    $jobsCount = 0;
                 }
-                yield $this->processResults();
+
             }
             if (!empty($jobs)) {
                 yield $this->emit($this->makeList($jobs));
