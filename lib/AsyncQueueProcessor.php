@@ -1,11 +1,13 @@
 <?php
 namespace Queueing;
 
+use Amp\Deferred;
 use Amp\Promise;
 use Amp\Success;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use function Amp\call;
+use function Amp\Promise\all;
 
 class AsyncQueueProcessor
 {
@@ -51,9 +53,23 @@ class AsyncQueueProcessor
         $this->subscription = $subscriber->subscribe();
         return call(function () use ($subscriber) {
             while (yield $this->subscription->advance()) {
-                yield $subscriber->sendResult(
-                    yield $this->perform($this->subscription->getCurrent())
-                );
+                /**
+                 * @var JobInterface $job
+                 * @var Deferred $resultWasSent
+                 */
+                [$job, $resultWasSent] = $this->subscription->getCurrent();
+                $result = yield $this->perform($job);
+                yield all([
+                    $subscriber->sendResult($result),
+                    call(function () use ($resultWasSent) {
+                        /**
+                         * Report that the result was sent
+                         * @see JobsQueueSubscriber::subscribe()
+                         * @see JobsQueueBulkSubscriber::subscribe()
+                         */
+                        $resultWasSent->resolve();
+                    })
+                ]);
             }
         });
     }
@@ -69,7 +85,7 @@ class AsyncQueueProcessor
         int $maxWaitTime = null
     ): AbstractJobsQueueSubscriber {
         if ($bulkSize > 1) {
-            return (new JobsQueueBulkSubscriber($queue, $this->jobFactory, $this->logger, $bulkSize))
+            return (new JobsQueueBulkSubscriber($queue, $this->jobFactory, $this->logger))
                 ->setBulkSize($bulkSize)
                 ->setMaxWaitTime(intval($maxWaitTime));
         }

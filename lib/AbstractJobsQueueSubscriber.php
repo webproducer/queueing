@@ -6,8 +6,6 @@ use Amp\Promise;
 use Amp\Emitter;
 use Amp\Delayed;
 use Amp\Deferred;
-use Amp\Sync\LocalSemaphore;
-use Amp\Sync\Lock;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use function Amp\call;
@@ -17,8 +15,6 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     /** @var JobsQueueInterface */
     private $queue;
     private $isStopped = false;
-    /** @var Deferred */
-    private $stoppedDeffer;
     /** @var Emitter */
     private $emitter;
     private $results = [];
@@ -31,30 +27,22 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     /** @var LoggerInterface */
     protected $logger;
     private $processingJobs = [];
-    /** @var LocalSemaphore */
-    private $semaphore;
-    /** @var Lock[] */
-    private $semaphoreLocks = [];
 
     /**
      * AbstractJobsQueueSubscriber constructor.
      * @param JobsQueueInterface $queue
      * @param JobFactoryInterface|null $jobFactory
      * @param LoggerInterface|null $logger
-     * @param int $maxJobs
      */
     public function __construct(
         JobsQueueInterface  $queue,
         JobFactoryInterface $jobFactory = null,
-        LoggerInterface     $logger = null,
-        int                 $maxJobs = 1
+        LoggerInterface     $logger = null
     ) {
         $this->queue = $queue;
         $this->jobFactory = $jobFactory ?: new BaseFactory();
         $this->waitResults = new WaitGroup();
         $this->logger = $logger ?? new NullLogger();
-        $this->semaphore = new LocalSemaphore($maxJobs);
-        $this->stoppedDeffer = new Deferred();
     }
 
     public function isStopped(): bool {
@@ -103,7 +91,6 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
         $this->isStopped = false;
         $this->emitter = new Emitter();
         return new Subscription($this->emitter->iterate(), function () use (&$isStopped) {
-            $this->stoppedDeffer->resolve(true);
             $this->isStopped = true;
         });
     }
@@ -111,14 +98,6 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
     protected function nextJob($timeout = null): Promise {
         //TODO: implement through foreign lib func?
         return call(function () use ($timeout) {
-            $lock = yield Promise\first([
-                $this->semaphore->acquire(),
-                $this->stoppedDeffer->promise(),
-            ]);
-            if ($this->isStopped || !($lock instanceof Lock)) {
-                return null;
-            }
-
             $result = null;
             $this->getQueue()->reserve($timeout)->onResolve(function ($e, $value) use (&$result) {
                 $result = $e ?: (is_null($value) ? self::TIMED_OUT : $value);
@@ -137,7 +116,6 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
                     $this->logger->debug($result->getMessage(), $context);
                     $result = self::TIMED_OUT;
                 } else {
-                    $lock->release();
                     throw $result;
                 }
             }
@@ -146,10 +124,6 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
                 $jobId = $result[0];
                 $this->processingJobs[$jobId] = microtime(true);
                 $this->logger->debug('Job reserved', ['job_id' => $jobId]);
-                $this->semaphoreLocks[$jobId] = $lock;
-            }
-            if ($result === self::TIMED_OUT || $this->isStopped) {
-                $lock->release();
             }
 
             return $result;
@@ -176,7 +150,6 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
 
     protected function complete(): Promise {
         return call(function () {
-//            $this->stoppedDeffer->resolve(true);
             $this->emitter->complete();
             $this->waitResults->lock();
             yield $this->waitResults;
@@ -184,18 +157,11 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
             if ($this->queue instanceof ClosableInterface) {
                 $this->queue->close();
             }
-            foreach ($this->semaphoreLocks as $lock) {
-                $lock->release();
-            }
         });
     }
 
     protected function processResults(): Promise {
         return call(function () {
-            if (empty($this->results) && !empty($this->semaphoreLocks)) {
-                yield $this->waitResults->waitForSomeIsDone();
-            }
-
             /**
              * @var Deferred $def
              * @var PerformingResult $result
@@ -214,10 +180,7 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
             foreach ($result->getDoneJobs() as $job) {
                 $id = $job->getId();
                 yield $this->queue->delete($id);
-                if (isset($this->semaphoreLocks[$id])) {
-                    $this->semaphoreLocks[$id]->release();
-                }
-                unset($this->processingJobs[$id], $this->semaphoreLocks[$id]);
+                unset($this->processingJobs[$id]);
                 $this->logger->debug('Job deleted', ['job_id' => $id]);
             }
             /** @var PerformingException $error */
@@ -225,18 +188,12 @@ abstract class AbstractJobsQueueSubscriber implements SubscriberInterface
                 $id = $error->getJob()->getId();
                 if ($error->needsToBeRepeated()) {
                     yield $this->queue->release($id, $error->getRepeatDelay());
-                    if (isset($this->semaphoreLocks[$id])) {
-                        $this->semaphoreLocks[$id]->release();
-                    }
-                    unset($this->processingJobs[$id], $this->semaphoreLocks[$id]);
+                    unset($this->processingJobs[$id]);
                     $this->logger->debug('Job released', ['job_id' => $id]);
                     continue;
                 }
                 yield $this->queue->bury($id);
-                if (isset($this->semaphoreLocks[$id])) {
-                    $this->semaphoreLocks[$id]->release();
-                }
-                unset($this->processingJobs[$id], $this->semaphoreLocks[$id]);
+                unset($this->processingJobs[$id]);
                 $this->logger->debug('Job buried', ['job_id' => $id]);
             }
         });

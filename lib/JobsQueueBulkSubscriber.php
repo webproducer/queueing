@@ -2,6 +2,7 @@
 
 namespace Queueing;
 
+use Amp\Deferred;
 use function Amp\asyncCall;
 
 /**
@@ -43,7 +44,14 @@ class JobsQueueBulkSubscriber extends AbstractJobsQueueSubscriber
 
 
                 if (count($jobs)) {
-                    yield $this->emit($this->makeList($jobs));
+                    $resultWasSent = new Deferred();
+                    /**
+                     * Send job and deferred to AsyncQueueProcessor
+                     * @see AsyncQueueProcessor::process()
+                     */
+                    yield $this->emit([$this->makeList($jobs), $resultWasSent]);
+                    // Wait for the result was sent
+                    yield $resultWasSent->promise();
                     yield $this->processResults();
                     $jobs = [];
                 }

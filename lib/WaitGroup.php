@@ -4,15 +4,12 @@ namespace Queueing;
 
 use Amp\Deferred;
 use Amp\Promise;
-use Amp\Success;
 
 class WaitGroup implements Promise
 {
     private $def;
     private $remain;
     private $isLocked;
-    /** @var Deferred[] */
-    private $doneWaiters = [];
 
     /**
      * WaitGroup constructor.
@@ -30,10 +27,6 @@ class WaitGroup implements Promise
      */
     public function done(int $cnt = 1) {
         $this->remain -= $cnt;
-        foreach ($this->doneWaiters as $waiter) {
-            $waiter->resolve();
-        }
-        $this->doneWaiters = [];
         if ($this->isLocked && ($this->remain <= 0)) {
             if (!$this->def->isResolved()) {
                 $this->def->resolve();
@@ -57,17 +50,6 @@ class WaitGroup implements Promise
         if ($this->remain <= 0) {
             $this->def->resolve();
         }
-    }
-
-    public function waitForSomeIsDone(): Promise {
-        if ($this->isLocked) {
-            return new Success();
-        }
-
-        $def = new Deferred();
-        $this->doneWaiters[] = $def;
-
-        return $def->promise();
     }
 
     /**
