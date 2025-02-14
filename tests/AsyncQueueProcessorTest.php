@@ -1,11 +1,12 @@
 <?php
+
 namespace Queueing\Tests;
 
 use Amp\Deferred;
 use Amp\Delayed;
-use Amp\Loop;
+use Amp\PHPUnit\AsyncTestCase;
 use Amp\Success;
-use PHPUnit\Framework\TestCase;
+use Amp\Promise;
 use Queueing\AsyncQueueProcessor;
 use Queueing\JobInterface;
 use Queueing\JobPerformerInterface;
@@ -13,7 +14,7 @@ use Queueing\JobsQueueInterface;
 use Queueing\PerformingException;
 use function Amp\call;
 
-class AsyncQueueProcessorTest extends TestCase
+class AsyncQueueProcessorTest extends AsyncTestCase
 {
     /**
      * @dataProvider dataProviderProcess
@@ -22,19 +23,20 @@ class AsyncQueueProcessorTest extends TestCase
      * @param array $buriedJobsIds
      * @param callable $performerCallback
      * @param int $bulkSize
+     * @param int $stopDelay
      * @param int $loopTimeout
+     * @return \Generator
      */
     public function testProcess(
-        array $jobsIds,
-        array $deletedJobsIds,
-        array $buriedJobsIds,
+        array    $jobsIds,
+        array    $deletedJobsIds,
+        array    $buriedJobsIds,
         callable $performerCallback,
-        int $bulkSize,
-        int $loopTimeout
+        int      $bulkSize,
+        int      $stopDelay,
+        int      $loopTimeout
     ) {
-        $jobIdWrapIntoArray = function (int $jobId) {
-            return [$jobId];
-        };
+        // Arrange
         $jobsQueue = $this->createMock(JobsQueueInterface::class);
         $jobsQueue->expects($this->atLeast(count($jobsIds)))
             ->method('reserve')
@@ -45,30 +47,47 @@ class AsyncQueueProcessorTest extends TestCase
                     return is_null($jobId) ? yield new Delayed($timeout, null) : [$jobId, ''];
                 });
             });
+        $actualDeletedJobsIds = [];
         $jobsQueue->expects($this->exactly(count($deletedJobsIds)))
             ->method('delete')
-            ->withConsecutive(...array_map($jobIdWrapIntoArray, $deletedJobsIds))
-            ->willReturn(new Success());
+            ->willReturnCallback(function (int $jobId) use (&$actualDeletedJobsIds) {
+                $actualDeletedJobsIds[] = $jobId;
+                return new Success();
+            });
+        $actualBuriedJobIds = [];
         $jobsQueue->expects($this->exactly(count($buriedJobsIds)))
             ->method('bury')
-            ->withConsecutive(...array_map($jobIdWrapIntoArray, $buriedJobsIds))
-            ->willReturn(new Success());
+            ->willReturnCallback(function (int $jobId) use (&$actualBuriedJobIds) {
+                $actualBuriedJobIds[] = $jobId;
+                return new Success();
+            });
 
         $performer = $this->createMock(JobPerformerInterface::class);
         $performer->expects($this->exactly(count($jobsIds)))
             ->method('perform')
             ->willReturnCallback($performerCallback);
         $processor = new AsyncQueueProcessor($performer);
-        Loop::run(function () use ($processor, $jobsQueue, $bulkSize, $loopTimeout) {
-            (new Delayed($loopTimeout))->onResolve(function () use ($processor) {
-                $processor->stop();
-            });
-            yield $processor->process($jobsQueue, $bulkSize, 10);
+
+        $stop = call(function () use ($processor, $stopDelay) {
+            yield new Delayed($stopDelay);
+            $processor->stop();
         });
+        $this->setTimeout($loopTimeout);
+
+        // Act
+        yield Promise\all([
+            $processor->process($jobsQueue, $bulkSize),
+            $stop
+        ]);
+
+        // Assert
+        sort($actualDeletedJobsIds);
+        $this->assertEquals($deletedJobsIds, $actualDeletedJobsIds);
+        sort($actualBuriedJobIds);
+        $this->assertEquals($buriedJobsIds, $actualBuriedJobIds);
     }
 
-    public function dataProviderProcess(): array
-    {
+    public function dataProviderProcess(): array {
         return [
             '1 job deleted (bulk:1)' => [
                 'jobsIds' => [
@@ -81,13 +100,14 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function () {
                     return call(function () {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def) {
+                        (new Delayed(50))->onResolve(function () use ($def) {
                             $def->resolve();
                         });
                         return $def->promise();
                     });
                 },
                 'bulkSize' => 1,
+                'stopDelay' => 40,
                 'loopTimeout' => 200,
             ],
             '1 job buried (bulk:1)' => [
@@ -100,13 +120,14 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function () {
                     return call(function () {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def) {
+                        (new Delayed(50))->onResolve(function () use ($def) {
                             $def->fail(new PerformingException());
                         });
                         return $def->promise();
                     });
                 },
                 'bulkSize' => 1,
+                'stopDelay' => 40,
                 'loopTimeout' => 200,
             ],
             '2 jobs deleted (bulk:1)' => [
@@ -120,13 +141,14 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function () {
                     return call(function () {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def) {
+                        (new Delayed(50))->onResolve(function () use ($def) {
                             $def->resolve();
                         });
                         return $def->promise();
                     });
                 },
                 'bulkSize' => 1,
+                'stopDelay' => 60,
                 'loopTimeout' => 200,
             ],
             '2 jobs buried (bulk:1)' => [
@@ -137,13 +159,14 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function () {
                     return call(function () {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def) {
+                        (new Delayed(50))->onResolve(function () use ($def) {
                             $def->fail(new PerformingException());
                         });
                         return $def->promise();
                     });
                 },
                 'bulkSize' => 1,
+                'stopDelay' => 2 * 50 * 1.1,
                 'loopTimeout' => 200,
             ],
             '2 jobs mixed (bulk:1)' => [
@@ -153,7 +176,7 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function (JobInterface $job) {
                     return call(function () use ($job) {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                        (new Delayed(50))->onResolve(function () use ($def, $job) {
                             if ($job->getId() === 1) {
                                 $def->resolve();
                             } else {
@@ -164,6 +187,7 @@ class AsyncQueueProcessorTest extends TestCase
                     });
                 },
                 'bulkSize' => 1,
+                'stopDelay' => 60,
                 'loopTimeout' => 200,
             ],
             '20 jobs deleted (bulk:1)' => [
@@ -173,14 +197,15 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function () {
                     return call(function () {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def) {
+                        (new Delayed(50))->onResolve(function () use ($def) {
                             $def->resolve();
                         });
                         return $def->promise();
                     });
                 },
                 'bulkSize' => 1,
-                'loopTimeout' => 7500,
+                'stopDelay' => 20 * 50 * 1.1,
+                'loopTimeout' => 1500,
             ],
             '20 jobs buried (bulk:1)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
@@ -189,14 +214,15 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                        (new Delayed(50))->onResolve(function () use ($def, $job) {
                             $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
                         });
                         return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 1,
-                'loopTimeout' => 7500,
+                'stopDelay' => 20 * 50 * 1.1,
+                'loopTimeout' => 1500,
             ],
             '20 jobs mixed (bulk:1)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
@@ -205,7 +231,7 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                        (new Delayed(50))->onResolve(function () use ($def, $job) {
                             if (($job->getId() % 10) === 0) {
                                 $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
                             } else {
@@ -216,7 +242,8 @@ class AsyncQueueProcessorTest extends TestCase
                     }, $job);
                 },
                 'bulkSize' => 1,
-                'loopTimeout' => 7500,
+                'stopDelay' => 20 * 50 * 1.1,
+                'loopTimeout' => 1500,
             ],
             '5 jobs deleted (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5],
@@ -225,14 +252,15 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function () {
                     return call(function () {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def) {
+                        (new Delayed(50))->onResolve(function () use ($def) {
                             $def->resolve();
                         });
                         return $def->promise();
                     });
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 200,
+                'stopDelay' => 50 * 1.1,
+                'loopTimeout' => 100,
             ],
             '5 jobs buried (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5],
@@ -241,14 +269,15 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                        (new Delayed(50))->onResolve(function () use ($def, $job) {
                             $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
                         });
                         return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 200,
+                'stopDelay' => 50 * 1.1,
+                'loopTimeout' => 100,
             ],
             '5 jobs mixed (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5],
@@ -257,7 +286,7 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                        (new Delayed(50))->onResolve(function () use ($def, $job) {
                             if (($job->getId() % 2) === 0) {
                                 $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
                             } else {
@@ -268,7 +297,8 @@ class AsyncQueueProcessorTest extends TestCase
                     }, $job);
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 200,
+                'stopDelay' => 50 * 1.1,
+                'loopTimeout' => 100,
             ],
             '10 jobs deleted (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
@@ -277,13 +307,14 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function () {
                     return call(function () {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def) {
+                        (new Delayed(50))->onResolve(function () use ($def) {
                             $def->resolve();
                         });
                         return $def->promise();
                     });
                 },
                 'bulkSize' => 5,
+                'stopDelay' => 2 * 50 * 1.1,
                 'loopTimeout' => 200,
             ],
             '10 jobs buried (bulk:5)' => [
@@ -293,13 +324,14 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                        (new Delayed(50))->onResolve(function () use ($def, $job) {
                             $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
                         });
                         return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 5,
+                'stopDelay' => 2 * 50 * 1.1,
                 'loopTimeout' => 200,
             ],
             '10 jobs mixed (bulk:5)' => [
@@ -309,7 +341,7 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                        (new Delayed(50))->onResolve(function () use ($def, $job) {
                             if (($job->getId() % 2) === 0) {
                                 $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
                             } else {
@@ -320,6 +352,7 @@ class AsyncQueueProcessorTest extends TestCase
                     }, $job);
                 },
                 'bulkSize' => 5,
+                'stopDelay' => 2 * 50 * 1.1,
                 'loopTimeout' => 200,
             ],
             '12 jobs deleted (bulk:5)' => [
@@ -329,14 +362,15 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function () {
                     return call(function () {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def) {
+                        (new Delayed(50))->onResolve(function () use ($def) {
                             $def->resolve();
                         });
                         return $def->promise();
                     });
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 3000,
+                'stopDelay' => 3 * 50 * 1.1,
+                'loopTimeout' => 400,
             ],
             '12 jobs buried (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
@@ -345,14 +379,15 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                        (new Delayed(50))->onResolve(function () use ($def, $job) {
                             $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
                         });
                         return $def->promise();
                     }, $job);
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 3000,
+                'stopDelay' => 3 * 50 * 1.1,
+                'loopTimeout' => 400,
             ],
             '12 jobs mixed (bulk:5)' => [
                 'jobsIds' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
@@ -361,7 +396,7 @@ class AsyncQueueProcessorTest extends TestCase
                 'performerCallback' => function (JobInterface $job) {
                     return call(function (JobInterface $job) {
                         $def = new Deferred();
-                        (new Delayed(400))->onResolve(function () use ($def, $job) {
+                        (new Delayed(50))->onResolve(function () use ($def, $job) {
                             if (($job->getId() % 2) === 0) {
                                 $def->fail((new PerformingException("Job#{$job->getId()}"))->setJob($job));
                             } else {
@@ -372,7 +407,8 @@ class AsyncQueueProcessorTest extends TestCase
                     }, $job);
                 },
                 'bulkSize' => 5,
-                'loopTimeout' => 3000,
+                'stopDelay' => 3 * 50 * 1.1,
+                'loopTimeout' => 400,
             ],
         ];
     }

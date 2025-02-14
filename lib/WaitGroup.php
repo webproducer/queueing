@@ -1,22 +1,25 @@
 <?php
+
 namespace Queueing;
 
 use Amp\Deferred;
 use Amp\Promise;
+use Amp\Success;
 
 class WaitGroup implements Promise
 {
     private $def;
-    private $remain = 0;
-    private $isLocked = false;
+    private $remain;
+    private $isLocked;
+    /** @var Deferred[] */
+    private $doneWaiters = [];
 
     /**
      * WaitGroup constructor.
      * @param int $remain
      * @param bool $isLocked
      */
-    public function __construct(int $remain = 0, bool $isLocked = false)
-    {
+    public function __construct(int $remain = 0, bool $isLocked = false) {
         $this->def = new Deferred();
         $this->remain = $remain;
         $this->isLocked = $isLocked;
@@ -25,11 +28,16 @@ class WaitGroup implements Promise
     /**
      * @param int $cnt
      */
-    public function done(int $cnt = 1)
-    {
+    public function done(int $cnt = 1) {
         $this->remain -= $cnt;
+        foreach ($this->doneWaiters as $waiter) {
+            $waiter->resolve();
+        }
+        $this->doneWaiters = [];
         if ($this->isLocked && ($this->remain <= 0)) {
-            $this->def->resolve();
+            if (!$this->def->isResolved()) {
+                $this->def->resolve();
+            }
         }
     }
 
@@ -37,27 +45,35 @@ class WaitGroup implements Promise
      * @param int $cnt
      * @throws Exception
      */
-    public function inc(int $cnt = 1)
-    {
+    public function inc(int $cnt = 1) {
         if ($this->isLocked) {
             throw new Exception('WaitGroup is locked');
         }
         $this->remain += $cnt;
     }
 
-    public function lock()
-    {
+    public function lock() {
         $this->isLocked = true;
         if ($this->remain <= 0) {
             $this->def->resolve();
         }
     }
 
+    public function waitForSomeIsDone(): Promise {
+        if ($this->isLocked) {
+            return new Success();
+        }
+
+        $def = new Deferred();
+        $this->doneWaiters[] = $def;
+
+        return $def->promise();
+    }
+
     /**
      * @inheritDoc
      */
-    public function onResolve(callable $onResolved)
-    {
+    public function onResolve(callable $onResolved) {
         $this->def->promise()->onResolve($onResolved);
     }
 }
