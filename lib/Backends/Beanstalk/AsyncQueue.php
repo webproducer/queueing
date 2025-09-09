@@ -45,6 +45,7 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
             } catch (DeadlineSoonException $e) {
                 throw new JobsQueueException('Deadline soon', (int) $e->getCode(), $e);
             } catch (BeanstalkException $e) {
+                $this->cli = null;
                 throw new JobsQueueException($e->getMessage(), (int)$e->getCode(), $e);
             }
         });
