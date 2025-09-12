@@ -6,22 +6,27 @@ use Amp\Beanstalk\BeanstalkClient;
 use Amp\Beanstalk\BeanstalkException;
 use Amp\Beanstalk\DeadlineSoonException;
 use Amp\Beanstalk\TimedOutException;
+use Amp\Deferred;
+use Amp\Delayed;
 use Amp\Promise;
 use Amp\Success;
 use Queueing\ClosableInterface;
 use Queueing\JobsQueueException;
 use Queueing\JobsQueueInterface;
+
 use function Amp\call;
 
 class AsyncQueue implements JobsQueueInterface, ClosableInterface
 {
     use TimeoutTrait;
 
-    /** @var BeanstalkClient */
+    /** @var ?BeanstalkClient */
     private $cli;
-    private $host = '127.0.0.1';
-    private $port = '11300';
-    private $tube = 'default';
+    /** @var ?Promise */
+    private $cliPromise;
+    private $host;
+    private $port;
+    private $tube;
 
     public function __construct(string $tubeName = 'default', string $host = '127.0.0.1', string $port = '11300')
     {
@@ -43,7 +48,7 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
             } catch (TimedOutException $e) {
                 return null;
             } catch (DeadlineSoonException $e) {
-                throw new JobsQueueException('Deadline soon', (int) $e->getCode(), $e);
+                throw new JobsQueueException('Deadline soon', (int)$e->getCode(), $e);
             } catch (BeanstalkException $e) {
                 $this->cli = null;
                 throw new JobsQueueException($e->getMessage(), (int)$e->getCode(), $e);
@@ -116,18 +121,25 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
         if ($this->cli) {
             return new Success($this->cli);
         }
-        $this->cli = new BeanstalkClient(sprintf('tcp://%s:%s', $this->host, $this->port));
-        if ($this->tube === 'default') {
-            return new Success($this->cli);
+        if ($this->cliPromise) {
+            return $this->cliPromise;
         }
-        return call(function () {
-            yield $this->cli->use($this->tube);
-            yield $this->cli->watch($this->tube);
-            $ignoreTubes = array_diff(yield $this->cli->listWatchedTubes(), [$this->tube]);
-            foreach ($ignoreTubes as $ignoreTube) {
-                yield $this->cli->ignore($ignoreTube);
+        $deferred = new Deferred();
+        $this->cliPromise = $deferred->promise();
+        return call(function () use ($deferred) {
+            $cli = new BeanstalkClient(sprintf('tcp://%s:%s', $this->host, $this->port));
+            if ($this->tube !== 'default') {
+                yield $cli->use($this->tube);
+                yield $cli->watch($this->tube);
+                $ignoreTubes = array_diff(yield $cli->listWatchedTubes(), [$this->tube]);
+                foreach ($ignoreTubes as $ignoreTube) {
+                    yield $cli->ignore($ignoreTube);
+                }
             }
-            return $this->cli;
+            $deferred->resolve(new Delayed(1, $cli));
+            $this->cli = $cli;
+            $this->cliPromise = null;
+            return $cli;
         });
     }
 }
