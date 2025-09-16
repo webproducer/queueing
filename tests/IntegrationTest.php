@@ -17,7 +17,6 @@ use Queueing\JobInterface;
 use Queueing\JobPerformerInterface;
 use Queueing\JobsQueueException;
 
-use function Amp\ByteStream\buffer;
 use function Amp\call;
 
 class IntegrationTest extends AsyncTestCase
@@ -38,7 +37,7 @@ class IntegrationTest extends AsyncTestCase
         yield $this->beanstalkd->start();
 
         if (!$this->beanstalkd->isRunning()) {
-            $stderr = yield buffer($this->beanstalkd->getStderr());
+            $stderr = yield $this->beanstalkd->getStderr()->read();
             if (!empty($stderr)) {
                 $this->fail(sprintf('can not start beanstalkd: %s', $stderr));
             }
