@@ -127,15 +127,8 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
         $deferred = new Deferred();
         $this->cliPromise = $deferred->promise();
         return call(function () use ($deferred) {
-            $cli = new BeanstalkClient(sprintf('tcp://%s:%s', $this->host, $this->port));
-            if ($this->tube !== 'default') {
-                yield $cli->use($this->tube);
-                yield $cli->watch($this->tube);
-                $ignoreTubes = array_diff(yield $cli->listWatchedTubes(), [$this->tube]);
-                foreach ($ignoreTubes as $ignoreTube) {
-                    yield $cli->ignore($ignoreTube);
-                }
-            }
+            $cli = new BeanstalkClient(sprintf('tcp://%s:%s?tube=%s', $this->host, $this->port, $this->tube));
+            yield $cli->watch($this->tube);
             $deferred->resolve(new Delayed(1, $cli));
             $this->cli = $cli;
             $this->cliPromise = null;
