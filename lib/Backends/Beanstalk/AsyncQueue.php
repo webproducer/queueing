@@ -20,6 +20,8 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
 {
     use TimeoutTrait;
 
+    private const TUBE_DEFAULT = 'default';
+
     /** @var ?BeanstalkClient */
     private $cli;
     /** @var ?Promise */
@@ -28,7 +30,7 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
     private $port;
     private $tube;
 
-    public function __construct(string $tubeName = 'default', string $host = '127.0.0.1', string $port = '11300')
+    public function __construct(string $tubeName = self::TUBE_DEFAULT, string $host = '127.0.0.1', string $port = '11300')
     {
         $this->tube = $tubeName;
         $this->host = $host;
@@ -129,6 +131,9 @@ class AsyncQueue implements JobsQueueInterface, ClosableInterface
         return call(function () use ($deferred) {
             $cli = new BeanstalkClient(sprintf('tcp://%s:%s?tube=%s', $this->host, $this->port, $this->tube));
             yield $cli->watch($this->tube);
+            if ($this->tube !== self::TUBE_DEFAULT) {
+                yield $cli->ignore(self::TUBE_DEFAULT);
+            }
             $deferred->resolve(new Delayed(1, $cli));
             $this->cli = $cli;
             $this->cliPromise = null;
