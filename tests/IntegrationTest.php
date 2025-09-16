@@ -16,10 +16,12 @@ use Queueing\BaseFactory;
 use Queueing\JobInterface;
 use Queueing\JobPerformerInterface;
 use Queueing\JobsQueueException;
+
 use function Amp\call;
 
 class IntegrationTest extends AsyncTestCase
 {
+    private const TUBE_NAME = 'test-tube';
     /** @var Process */
     private $beanstalkd;
     /** @var Queue */
@@ -30,12 +32,21 @@ class IntegrationTest extends AsyncTestCase
      * @throws DeadlineSoonException
      */
     public function setUpAsync() {
+
         $this->beanstalkd = new Process('beanstalkd -l 127.0.0.1');
         yield $this->beanstalkd->start();
 
-        if (!$this->queue) {
-            $this->queue = new Queue();
+        if (!$this->beanstalkd->isRunning()) {
+            $stderr = yield $this->beanstalkd->getStderr()->read();
+            if (!empty($stderr)) {
+                $this->fail(sprintf('can not start beanstalkd: %s', $stderr));
+            }
         }
+
+        if (!$this->queue) {
+            $this->queue = new Queue(self::TUBE_NAME);
+        }
+        yield new Delayed(50);
         $this->drainQueue();
     }
 
@@ -44,11 +55,12 @@ class IntegrationTest extends AsyncTestCase
      */
     public function tearDownAsync() {
         if ($this->beanstalkd) {
-            echo yield $this->beanstalkd->getStdout()->read();
             if ($this->beanstalkd->isRunning()) {
                 $this->beanstalkd->signal(SIGTERM);
                 $exitCode = yield $this->beanstalkd->join();
+                printf("Beanstalkd stdout: %s\n", yield $this->beanstalkd->getStdout()->read());
                 printf("Beanstalkd exit code: %s\n", $exitCode);
+                printf("Beanstalkd stderr: %s\n", yield $this->beanstalkd->getStderr()->read());
             }
         }
     }
@@ -100,7 +112,7 @@ class IntegrationTest extends AsyncTestCase
 
         // Act
         yield Promise\all([
-            $processor->process(new AsyncQueue(), $bulkSize),
+            $processor->process(new AsyncQueue(self::TUBE_NAME), $bulkSize),
             $stop
         ]);
 
